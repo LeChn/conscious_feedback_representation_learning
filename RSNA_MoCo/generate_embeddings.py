@@ -55,7 +55,7 @@ def parse_option():
 
     # model definition
     parser.add_argument('--model', type=str, default='resnet50', choices=['resnet50', 'resnet50x2', 'resnet50x4'])
-    parser.add_argument('--model_path', type=str, default='/home/ubuntu/wbm/MICCAI 2020/RSNAMODELS/MoCo0.999_softmax_16384_resnet50_lr_0.0001_decay_0.0001_bsz_128_crop_0.4_aug_NULL/ckpt_epoch_100.pth', help='the model to test')
+    parser.add_argument('--model_path', type=str, default='/home/jason/github/MIRL/RSNA_MoCo/5ckpt_epoch_70.pth', help='the model to test')
     parser.add_argument('--features_path', type=str, default="./all_features_un.npy")
     parser.add_argument('--labels_path', type=str, default="./all_labels_un.npy")
     parser.add_argument('--layer', type=int, default=7, help='which layer to evaluate')
@@ -64,12 +64,14 @@ def parse_option():
     parser.add_argument('--crop', type=float, default=0.2, help='minimum crop')
 
     # dataset
-    parser.add_argument('--train_txt', type=str, default="./experiments_configure/trainF.txt")
-    parser.add_argument('--val_txt', type=str, default="./experiments_configure/valF.txt")
+    parser.add_argument('--train_txt', type=str,
+                        default="../experiments_configure/train20F.txt")
+    parser.add_argument('--val_txt', type=str,
+                        default="../experiments_configure/valF.txt")
     parser.add_argument('--dataset', type=str, default='imagenet100', choices=['imagenet100', 'imagenet'])
-    parser.add_argument('--data_folder', type=str, default='/media/ubuntu/data')
-    parser.add_argument('--save_path', type=str, default='/home/ubuntu/wbm/MICCAI 2020/finetunemodel')
-    parser.add_argument('--tb_path', type=str, default='/home/ubuntu/wbm/MICCAI 2020/ts_bd')
+    parser.add_argument('--data_folder', type=str, default='/DATA2/Data/RSNA')
+    parser.add_argument('--save_path', type=str, default='.')
+    parser.add_argument('--tb_path', type=str, default='./ts_bd')
     # augmentation
     parser.add_argument('--aug', type=str, default='CJ', choices=['NULL', 'CJ'])
     # add BN
@@ -134,7 +136,7 @@ def validate_multilabel(val_loader, model, opt):
             if opt.gpu is not None:
                 input = input.cuda(opt.gpu, non_blocking=True)
             input = input.float()
-            target = target.view(-1, 6).contiguous().cuda(async=True).float()
+            target = target.view(-1, 6).contiguous().cuda(non_blocking=True).float()
             outGT = torch.cat((outGT, target), 0)
             # compute output
             feat = model(input, opt.layer)

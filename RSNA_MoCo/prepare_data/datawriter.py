@@ -90,8 +90,8 @@ if __name__ == '__main__':
     parser.add_argument("-dcm_path", "--dcm_path", type=str)
     parser.add_argument("-png_path", "--png_path", type=str)
     args = parser.parse_args()
-    dcm_path = "/media/ubuntu/data/rsna-intracranial-hemorrhage-detection/stage_2_test"
-    png_path = "/media/ubuntu/data/RSNAtest"
+    dcm_path = "/DATA2/Data/stage_2_train"
+    png_path = "/DATA2/Data/RSNA/RSNApng"
 
     if not os.path.exists(png_path):
         os.makedirs(png_path)

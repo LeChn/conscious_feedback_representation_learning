@@ -2,7 +2,7 @@ import os
 import random
 import shutil
 from glob import glob
-train_path = "/media/ubuntu/data/RSNApng"
+train_path = "/DATA2/Data/RSNA/RSNApng"
 files = os.listdir(train_path)
 random.shuffle(files)
 split = int(len(files)*0.75)
@@ -16,7 +16,7 @@ def move_files(files, move_path):
         shutil.move(ori_path, move_to_path)
 
 if __name__ == '__main__':
-    valp = "/media/ubuntu/data/RSNAVAL"
-    trainp = "/media/ubuntu/data/RSNATR"
+    valp = "/DATA2/Data/RSNA/RSNAVAL"
+    trainp = "/DATA2/Data/RSNA/RSNATR"
     move_files(train_files, trainp)
     move_files(val_files, valp)
