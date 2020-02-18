@@ -24,6 +24,6 @@ if __name__ == '__main__':
     path = "/DATA2/Data/RSNA/RSNAFVAL"
     files = os.listdir(path)
     shuffle(files)
-    files = files[:int(percent*len(files))]
+    # files = files[:int(percent*len(files))]
     val_txt = "../../experiments_configure/valF.txt"
     text_save(val_txt, files)

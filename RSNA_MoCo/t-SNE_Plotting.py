@@ -1,5 +1,4 @@
 # coding='utf-8'
-"""t-SNE 对手写数字进行可视化"""
 from time import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,14 +13,10 @@ from sklearn.manifold import TSNE
 features_path = "./all_features_un.npy"
 labels_path = "./all_labels_un.npy"
 low = 0
-high = 100
+high = 700
+class_Name = ['epidural', 'intraparenchymal',
+              'intraventricular', 'subarachnoid', 'subdural', 'any']
 
-def get_data():
-    digits = datasets.load_digits(n_class=6)
-    data = digits.data
-    label = digits.target
-    n_samples, n_features = data.shape
-    return data, label, n_samples, n_features
 
 def get_rsna_data():
     all_features = []
@@ -44,15 +39,16 @@ def get_rsna_data():
             a = np.ones((1, ))
             a[0] = all_labels[num]
             all_selected_labels = np.concatenate((all_selected_labels, a))
-            all_selected_features = np.concatenate((all_selected_features, all_features[num][np.newaxis, :]))
+            all_selected_features = np.concatenate(
+                (all_selected_features, all_features[num][np.newaxis, :]))
     return all_selected_features[1:, :], all_selected_labels[1:], all_selected_features.shape[0], all_selected_features.shape[1]
 
 
 def get_rsna_model():
     all_features = []
     all_labels = []
-    features = np.load(features_path, allow_pickle=True)[low:high]
-    labels = np.load(labels_path, allow_pickle=True)[low:high]
+    features = np.load(features_path, allow_pickle=True)
+    labels = np.load(labels_path, allow_pickle=True)
     print(labels.shape)
     for batch in features:
         all_features += batch.tolist()
@@ -62,15 +58,18 @@ def get_rsna_model():
     all_labels = np.array(all_labels)
     all_features = np.reshape(all_features, (-1, 128))
     all_labels = np.reshape(all_labels, (-1, 6))
-    return all_features, np.argmax(all_labels,axis= 1), all_labels.shape[0], all_labels.shape[1]
+    return all_features, np.argmax(all_labels, axis=1), all_labels.shape[0], all_labels.shape[1]
+
 
 def plot_embedding(data, label, title):
     x_min, x_max = np.min(data, 0), np.max(data, 0)
     data = (data - x_min) / (x_max - x_min)
-    df = pd.DataFrame(data[:,0], columns = ['x']) 
-    df['y'] = data[:,1]
-    df['label'] = label
-    num_Classes = len(Counter(label).keys())
+    df = pd.DataFrame(data[:, 0], columns=['Dimension 1'])
+    df['Dimension 2'] = data[:, 1]
+    counts = Counter(label)
+    df['Label'] = [class_Name[i] +
+                   " (" + str(counts[i]) + ")" for i in label.tolist()]
+    num_Classes = len(counts.keys())
     # fig = plt.figure()
     # ax = plt.subplot(111)
     # for i in range(data.shape[0]):
@@ -78,45 +77,54 @@ def plot_embedding(data, label, title):
     #              color=plt.cm.Set1(label[i]),
     #              fontdict={'weight': 'bold', 'size': 9})
 
-    fig = plt.figure(figsize=(16,10))
-    plt.xticks([])
-    plt.yticks([])
+    fig = plt.figure(figsize=(16, 10))
     plt.title(title)
     print("The number of classes is", num_Classes)
-    sns.scatterplot(
-        x='x', y='y',
-        hue='label',
-        style="label",
-        # cmap=sns.cubehelix_palette(light=1, as_cmap=True),
+    print(Counter(label))
+    g = sns.scatterplot(
+        x='Dimension 1', y='Dimension 2',
+        hue='Label',
+        style="Label",
         palette=sns.color_palette("hls", num_Classes),
         data=df,
         legend="full",
         alpha=0.8
     )
+
+    g.legend(loc='upper right')
     return fig
+
+
+def removeLargestClass(data, label):
+    rem = [i != 0 for i in label]
+    data = data[rem]
+    label = label[rem]
+    return data, label
 
 
 def main():
     data, label, n_samples, n_features = get_rsna_model()
     print(data.shape, label.shape)
-    #print(label[:30])
     print('Computing t-SNE embedding')
     tsne = TSNE(n_components=2, perplexity=5, random_state=0, n_iter=2000)
     t0 = time()
-    # result = tsne.fit_transform(data)
-    # np.save("x.npy", result)
+    result = tsne.fit_transform(data)
+    np.save("x.npy", result)
     result = np.load("x.npy")
-    # tsne = TSNE(n_components=1, perplexity=5, random_state=0, n_iter=2000)
-    # label = tsne.fit_transform(label)
-    # print(result.shape)
     fig = plot_embedding(result, label,
-                         't-SNE embedding of the RSNA data (time %.2fs)'
-                         % (time() - t0))
-    plt.savefig("result.pdf")
+                         't-SNE embedding of the last layer of encoder of MoCo with 100% labeled data fine-tuning')
+    # t-SNE embedding of the last layer of encoder of MoCo with 5% labeled data fine-tuning
+    plt.savefig("MoCo_supervised_100percentage_data.pdf")
+
+    data, label = removeLargestClass(data, label)
+    tsne = TSNE(n_components=2, perplexity=5, random_state=0, n_iter=2000)
+    result = tsne.fit_transform(data)
+    fig = plot_embedding(result, label,
+                         't-SNE embedding of the last layer of encoder of MoCo with 100% labeled data fine-tuning, underrepresented')
+    plt.savefig("MoCo_supervised_100percentage_data_underrepresented.pdf")
+
     plt.show(fig)
 
 
 if __name__ == '__main__':
-    #a, b, c, d = get_rsna_data()
-    #print(a.shape, b.shape)
     main()
