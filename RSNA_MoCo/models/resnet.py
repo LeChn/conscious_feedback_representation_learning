@@ -119,9 +119,12 @@ class ResNet(nn.Module):
 
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, self.base, layers[0])
-        self.layer2 = self._make_layer(block, self.base * 2, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, self.base * 4, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, self.base * 8, layers[3], stride=2)
+        self.layer2 = self._make_layer(
+            block, self.base * 2, layers[1], stride=2)
+        self.layer3 = self._make_layer(
+            block, self.base * 4, layers[2], stride=2)
+        self.layer4 = self._make_layer(
+            block, self.base * 8, layers[3], stride=2)
         self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fc = nn.Linear(self.base * 8 * block.expansion, low_dim)
         self.l2norm = Normalize(2)
@@ -239,6 +242,7 @@ def resnet152(pretrained=False, **kwargs):
 
 class InsResNet50(nn.Module):
     """Encoder for instance discrimination and MoCo"""
+
     def __init__(self, width=1):
         super(InsResNet50, self).__init__()
         self.encoder = resnet50(width=width)
@@ -247,8 +251,10 @@ class InsResNet50(nn.Module):
     def forward(self, x, layer=7):
         return self.encoder(x, layer)
 
+
 class InsResNet50_imagenet(nn.Module):
     """Encoder for instance discrimination and MoCo"""
+
     def __init__(self, width=1):
         super(InsResNet50_imagenet, self).__init__()
         self.encoder = resnet50(width=width)
@@ -271,7 +277,8 @@ class ResNetV1(nn.Module):
             self.l_to_ab = resnet101(in_channel=1, width=0.5)
             self.ab_to_l = resnet101(in_channel=2, width=0.5)
         else:
-            raise NotImplementedError('model {} is not implemented'.format(name))
+            raise NotImplementedError(
+                'model {} is not implemented'.format(name))
 
     def forward(self, x, layer=7):
         l, ab = torch.split(x, [1, 2], dim=1)
@@ -293,7 +300,8 @@ class ResNetV2(nn.Module):
             self.l_to_ab = resnet101(in_channel=1, width=1)
             self.ab_to_l = resnet101(in_channel=2, width=1)
         else:
-            raise NotImplementedError('model {} is not implemented'.format(name))
+            raise NotImplementedError(
+                'model {} is not implemented'.format(name))
 
     def forward(self, x, layer=7):
         l, ab = torch.split(x, [1, 2], dim=1)
@@ -315,7 +323,8 @@ class ResNetV3(nn.Module):
             self.l_to_ab = resnet101(in_channel=1, width=2)
             self.ab_to_l = resnet101(in_channel=2, width=2)
         else:
-            raise NotImplementedError('model {} is not implemented'.format(name))
+            raise NotImplementedError(
+                'model {} is not implemented'.format(name))
 
     def forward(self, x, layer=7):
         l, ab = torch.split(x, [1, 2], dim=1)

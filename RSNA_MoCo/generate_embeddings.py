@@ -80,7 +80,7 @@ def parse_option():
     parser.add_argument('--model', type=str, default='resnet50',
                         choices=['resnet50', 'resnet50x2', 'resnet50x4'])
     parser.add_argument('--model_path', type=str,
-                        default='/home/jason/github/MIRL/RSNA_MoCo/MoCo_supervised_1percentage_data.pth', help='the model to test')
+                        default='/home/jason/github/MIRL/RSNA_MoCo/ckpt_epoch_110.pth', help='the model to test')
     parser.add_argument('--features_path', type=str,
                         default="./all_features_un.npy")
     parser.add_argument('--labels_path', type=str,
