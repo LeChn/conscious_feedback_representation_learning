@@ -70,7 +70,7 @@ def parse_option():
 
     # dataset
     parser.add_argument('--train_txt', type=str,
-                        default="../experiments_configure/train1F.txt")
+                        default="../experiments_configure/train100F.txt")
     parser.add_argument('--dataset', type=str, default='imagenet100',
                         choices=['imagenet100', 'imagenet'])
     parser.add_argument('--data_folder', type=str,
@@ -211,12 +211,11 @@ def main():
     # create model and optimizer
     n_data = len(train_dataset)
 
-    simMLP = simCLR().cuda()
     if args.model == 'resnet50':
-        model = InsResNet50()
+        model = simCLR()
         #model = torch.nn.DataParallel(model)
         if args.moco:
-            model_ema = InsResNet50()
+            model_ema = simCLR()
             #model_ema = torch.nn.DataParallel(model_ema)
     elif args.model == 'resnet50x2':
         model = InsResNet50(width=2)
@@ -256,10 +255,9 @@ def main():
                                 lr=args.learning_rate,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
-    optimizer_mlp = torch.optim.SGD(
-        simMLP.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    # optimizer_mlp = torch.optim.SGD(
+    #     simMLP.parameters(), lr=0.1, weight_decay=args.weight_decay)
     cudnn.benchmark = True
-
     if args.amp:
         model, optimizer = amp.initialize(
             model, optimizer, opt_level=args.opt_level)
@@ -308,7 +306,7 @@ def main():
         time1 = time.time()
         if args.moco:
             loss, prob = train_moco(
-                epoch, train_loader, model, model_ema, contrast, criterion, optimizer, args, simMLP, optimizer_mlp)
+                epoch, train_loader, model, model_ema, contrast, criterion, optimizer, args)
         time2 = time.time()
         print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
 
@@ -362,7 +360,7 @@ def main():
         torch.cuda.empty_cache()
 
 
-def train_moco(epoch, train_loader, model, model_ema, contrast, criterion, optimizer, opt, simMLP, optimizer_mlp):
+def train_moco(epoch, train_loader, model, model_ema, contrast, criterion, optimizer, opt):
     """
     one epoch training for instance discrimination
     """
@@ -395,36 +393,34 @@ def train_moco(epoch, train_loader, model, model_ema, contrast, criterion, optim
         else:
             inputs = inputs.cuda()
         #index = index.cuda(opt.gpu, non_blocking=True)
-
         # ===================forward=====================
         x1, x2 = torch.split(inputs, [1, 1], dim=1)
 
         # ids for ShuffleBN
         shuffle_ids, reverse_ids = get_shuffle_ids(bsz)
-
         feat_q = model(x1)
         with torch.no_grad():
             x2 = x2[shuffle_ids]
             feat_k = model_ema(x2)
             feat_k = feat_k[reverse_ids]
 
-        feat_q = simMLP(feat_q)
-        feat_k = simMLP(feat_k)
+        # loss = 0.013
+        # 1 layer MLP
 
+        # loss = 14.000
+        # loss = 7.....
         out = contrast(feat_q, feat_k)
 
         loss = criterion(out)
         prob = out[:, 0].mean()
         # ===================backward=====================
         optimizer.zero_grad()
-        optimizer_mlp.zero_grad()
         if opt.amp:
             with amp.scale_loss(loss, optimizer) as scaled_loss:
                 scaled_loss.backward()
         else:
             loss.backward()
         optimizer.step()
-        optimizer_mlp.step()
 
         # ===================meters=====================
         loss_meter.update(loss.item(), bsz)

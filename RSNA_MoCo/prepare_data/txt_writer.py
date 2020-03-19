@@ -13,7 +13,7 @@ def text_save(filename, data):  # filename为写入CSV文件的路径，data为�
 if __name__ == '__main__':
     from random import shuffle
     import random
-    percent = 0.01
+    percent = 1
     path = "/DATA2/Data/RSNA/RSNAFTR"
     files = os.listdir(path)
     shuffle(files)

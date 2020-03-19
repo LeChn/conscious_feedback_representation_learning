@@ -15,10 +15,12 @@ sns.set()
 ax = sns.lineplot(x='% Data', y='value', hue='variable', style="variable", markers=True, dashes=False,
                   data=pd.melt(df, ['% Data']))
 ax.set(xscale='log')
+ax.set_ylim([0.75, 1.00])
 plt.xticks(df["% Data"], df["% Data"])
 # ax.set_xticklabels(df['% Data'])
-ax.set(xlabel='Percentage of Labeled Data', ylabel='Classification Accuracy',
+ax.set(xlabel='Percentage of Labeled Data', ylabel='AUC',
        title='MoCo_Super VS. MoCo_Efficient VS. MoCo VS. ResNet')
-# ax.legend(loc='upper right')
+handles, labels = ax.get_legend_handles_labels()
+ax.legend(handles=handles[1:], labels=labels[1:], loc='lower right')
 
 plt.show()
