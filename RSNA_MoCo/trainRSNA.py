@@ -212,10 +212,10 @@ def main():
     n_data = len(train_dataset)
 
     if args.model == 'resnet50':
-        model = simCLR()
+        model = InsResNet50()
         #model = torch.nn.DataParallel(model)
         if args.moco:
-            model_ema = simCLR()
+            model_ema = InsResNet50()
             #model_ema = torch.nn.DataParallel(model_ema)
     elif args.model == 'resnet50x2':
         model = InsResNet50(width=2)
