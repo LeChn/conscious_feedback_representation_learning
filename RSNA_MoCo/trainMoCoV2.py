@@ -20,7 +20,7 @@ from NCE.NCEAverage import MemoryMoCo
 from NCE.NCECriterion import NCECriterion
 from NCE.NCECriterion import NCESoftmaxLoss
 import pdb
-os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1, 2, 3"
 
 try:
     from apex import amp, optimizers
@@ -77,7 +77,7 @@ def parse_option():
                         default="/DATA2/Data/RSNA/RSNAFTR")
 
     # resume
-    parser.add_argument('--resume', default='./ckpt_epoch_100.pth', type=str,
+    parser.add_argument('--resume', default='', type=str,
                         help='path to latest checkpoint (default: none)')
 
     # augmentation setting
@@ -270,7 +270,7 @@ def main():
                 model_ema, optimizer_ema, opt_level=args.opt_level)
 
     # optionally resume from a checkpoint
-    args.start_epoch = 1
+    args.start_epoch = 0
     if args.resume:
         if os.path.isfile(args.resume):
             print("=> loading checkpoint '{}'".format(args.resume))
@@ -398,17 +398,12 @@ def train_moco(epoch, train_loader, model, model_ema, contrast, criterion, optim
 
         # ids for ShuffleBN
         shuffle_ids, reverse_ids = get_shuffle_ids(bsz)
-        feat_q = model(x1)
+        feat_q = model(x1)[1]
         with torch.no_grad():
             x2 = x2[shuffle_ids]
-            feat_k = model_ema(x2)
+            feat_k = model_ema(x2)[1]
             feat_k = feat_k[reverse_ids]
 
-        # loss = 0.013
-        # 1 layer MLP
-
-        # loss = 14.000
-        # loss = 7.....
         out = contrast(feat_q, feat_k)
 
         loss = criterion(out)

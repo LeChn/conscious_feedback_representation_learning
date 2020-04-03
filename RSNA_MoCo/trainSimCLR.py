@@ -20,7 +20,7 @@ from NCE.NCEAverage import MemoryMoCo
 from NCE.NCECriterion import NCECriterion
 from NCE.NCECriterion import NCESoftmaxLoss
 import pdb
-os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1, 2, 3"
 
 try:
     from apex import amp, optimizers
@@ -77,7 +77,7 @@ def parse_option():
                         default="/DATA2/Data/RSNA/RSNAFTR")
 
     # resume
-    parser.add_argument('--resume', default='./ckpt_epoch_100.pth', type=str,
+    parser.add_argument('--resume', default='', type=str,
                         help='path to latest checkpoint (default: none)')
 
     # augmentation setting
@@ -212,44 +212,27 @@ def main():
     n_data = len(train_dataset)
 
     if args.model == 'resnet50':
-        model = InsResNet50()
+        model = simCLR()
         #model = torch.nn.DataParallel(model)
-        if args.moco:
-            model_ema = InsResNet50()
-            #model_ema = torch.nn.DataParallel(model_ema)
     elif args.model == 'resnet50x2':
-        model = InsResNet50(width=2)
-        if args.moco:
-            model_ema = InsResNet50(width=2)
+        model = simCLR(width=2)
     elif args.model == 'resnet50x4':
-        model = InsResNet50(width=4)
-        if args.moco:
-            model_ema = InsResNet50(width=4)
+        model = simCLR(width=4)
     else:
         raise NotImplementedError('model not supported {}'.format(args.model))
     '''model = Unet(encoder_weights="None", in_channels=1)
     model_ema = Unet(encoder_weights="None", in_channels=1)'''
 
     # copy weights from `model' to `model_ema'
-    if args.moco:
-        moment_update(model, model_ema, 0)
 
     # set the contrast memory and criterion
-    if args.moco:
-        #contrast = MemoryMoCo(128, n_data, args.nce_k, args.nce_t, args.softmax).cuda(args.gpu)
-        contrast = MemoryMoCo(128, n_data, args.nce_k,
-                              args.nce_t, args.softmax).cuda()
-    else:
-        contrast = MemoryInsDis(
-            128, n_data, args.nce_k, args.nce_t, args.nce_m, args.softmax).cuda(args.gpu)
+    contrast = MemoryInsDis(128, n_data, args.nce_k,
+                            args.nce_t, args.nce_m, args.softmax).cuda(args.gpu)
 
     criterion = NCESoftmaxLoss() if args.softmax else NCECriterion(n_data)
     criterion = criterion.cuda()
 
     model = model.cuda()
-
-    if args.moco:
-        model_ema = model_ema.cuda()
 
     optimizer = torch.optim.SGD(model.parameters(),
                                 lr=args.learning_rate,
@@ -261,16 +244,9 @@ def main():
     if args.amp:
         model, optimizer = amp.initialize(
             model, optimizer, opt_level=args.opt_level)
-        if args.moco:
-            optimizer_ema = torch.optim.SGD(model_ema.parameters(),
-                                            lr=0,
-                                            momentum=0,
-                                            weight_decay=0)
-            model_ema, optimizer_ema = amp.initialize(
-                model_ema, optimizer_ema, opt_level=args.opt_level)
 
     # optionally resume from a checkpoint
-    args.start_epoch = 1
+    args.start_epoch = 0
     if args.resume:
         if os.path.isfile(args.resume):
             print("=> loading checkpoint '{}'".format(args.resume))
@@ -280,8 +256,6 @@ def main():
             model.load_state_dict(checkpoint['model'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             contrast.load_state_dict(checkpoint['contrast'])
-            if args.moco:
-                model_ema.load_state_dict(checkpoint['model_ema'])
 
             if args.amp and checkpoint['opt'].amp:
                 print('==> resuming amp state_dict')
@@ -306,7 +280,7 @@ def main():
         time1 = time.time()
         if args.moco:
             loss, prob = train_moco(
-                epoch, train_loader, model, model_ema, contrast, criterion, optimizer, args)
+                epoch, train_loader, model, contrast, criterion, optimizer, args)
         time2 = time.time()
         print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
 
@@ -326,8 +300,6 @@ def main():
                 'optimizer': optimizer.state_dict(),
                 'epoch': epoch,
             }
-            if args.moco:
-                state['model_ema'] = model_ema.state_dict()
             if args.amp:
                 state['amp'] = amp.state_dict()
             save_file = os.path.join(
@@ -345,8 +317,6 @@ def main():
             'optimizer': optimizer.state_dict(),
             'epoch': epoch,
         }
-        if args.moco:
-            state['model_ema'] = model_ema.state_dict()
         if args.amp:
             state['amp'] = amp.state_dict()
         save_file = os.path.join(args.model_folder, 'current.pth')
@@ -360,19 +330,17 @@ def main():
         torch.cuda.empty_cache()
 
 
-def train_moco(epoch, train_loader, model, model_ema, contrast, criterion, optimizer, opt):
+def train_moco(epoch, train_loader, model, contrast, criterion, optimizer, opt):
     """
     one epoch training for instance discrimination
     """
-    print("Train MoCO!")
+    print("Train SimCLR!")
     model.train()
-    model_ema.eval()
 
     def set_bn_train(m):
         classname = m.__class__.__name__
         if classname.find('BatchNorm') != -1:
             m.train()
-    model_ema.apply(set_bn_train)
 
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -398,16 +366,22 @@ def train_moco(epoch, train_loader, model, model_ema, contrast, criterion, optim
 
         # ids for ShuffleBN
         shuffle_ids, reverse_ids = get_shuffle_ids(bsz)
-        pdb.set_trace()
-        feat_q = model(x1)
-        with torch.no_grad():
-            x2 = x2[shuffle_ids]
-            feat_k = model_ema(x2)
-            feat_k = feat_k[reverse_ids]
+        feature_1, out_1 = model(x1)
+        feature_2, out_2 = model(x2)
+        # [2*B, D]
+        out = torch.cat([out_1, out_2], dim=0)
+        # [2*B, 2*B]
+        sim_matrix = torch.exp(torch.mm(out, out.t().contiguous()) / 0.5)
+        mask = (torch.ones_like(sim_matrix) -
+                torch.eye(2 * 128, device=sim_matrix.device)).bool()
+        # [2*B, 2*B-1]
+        sim_matrix = sim_matrix.masked_select(mask).view(2 * 128, -1)
 
-        out = contrast(feat_q, feat_k)
-
-        loss = criterion(out)
+        # compute loss
+        pos_sim = torch.exp(torch.sum(out_1 * out_2, dim=-1) / 0.5)
+        # [2*B]
+        pos_sim = torch.cat([pos_sim, pos_sim], dim=0)
+        loss = (- torch.log(pos_sim / sim_matrix.sum(dim=-1))).mean()
         prob = out[:, 0].mean()
         # ===================backward=====================
         optimizer.zero_grad()
@@ -421,8 +395,6 @@ def train_moco(epoch, train_loader, model, model_ema, contrast, criterion, optim
         # ===================meters=====================
         loss_meter.update(loss.item(), bsz)
         prob_meter.update(prob.item(), bsz)
-
-        moment_update(model, model_ema, opt.alpha)
 
         torch.cuda.synchronize()
         batch_time.update(time.time() - end)
