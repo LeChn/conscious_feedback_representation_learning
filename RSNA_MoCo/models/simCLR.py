@@ -30,10 +30,10 @@ class simCLR(nn.Module):
     def forward(self, x):
         x = self.f(x)
         feature = torch.flatten(x, start_dim=1)
+        return F.normalize(feature, dim=-1)
         out = self.g(feature)
         return F.normalize(feature, dim=-1), F.normalize(out, dim=-1)
 
 
 # mod = simCLR()
-# norm = Normalize()
 # pdb.set_trace()

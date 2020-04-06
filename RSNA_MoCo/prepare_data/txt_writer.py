@@ -14,7 +14,7 @@ if __name__ == '__main__':
     from random import shuffle
     import random
     percent = 1
-    path = "/DATA2/Data/RSNA/RSNAFTR"
+    path = "/DATA2/Data/RSNA/RSNATR"
     files = os.listdir(path)
     shuffle(files)
     files = files[:int(percent*len(files))]

@@ -20,7 +20,7 @@ from NCE.NCEAverage import MemoryMoCo
 from NCE.NCECriterion import NCECriterion
 from NCE.NCECriterion import NCESoftmaxLoss
 import pdb
-os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1, 2, 3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1"
 
 try:
     from apex import amp, optimizers
@@ -121,7 +121,7 @@ def parse_option():
         opt.lr_decay_epochs.append(int(it))
 
     opt.method = 'softmax' if opt.softmax else 'nce'
-    prefix = 'MoCo{}'.format(opt.alpha) if opt.moco else 'InsDis'
+    prefix = 'SimCLR{}'.format(opt.alpha) if opt.moco else 'InsDis'
 
     opt.model_name = '{}_{}_{}_{}_lr_{}_decay_{}_bsz_{}_crop_{}'.format(prefix, opt.method, opt.nce_k, opt.model,
                                                                         opt.learning_rate, opt.weight_decay,
@@ -363,19 +363,16 @@ def train_moco(epoch, train_loader, model, contrast, criterion, optimizer, opt):
         #index = index.cuda(opt.gpu, non_blocking=True)
         # ===================forward=====================
         x1, x2 = torch.split(inputs, [1, 1], dim=1)
-
-        # ids for ShuffleBN
-        shuffle_ids, reverse_ids = get_shuffle_ids(bsz)
+        
         feature_1, out_1 = model(x1)
         feature_2, out_2 = model(x2)
         # [2*B, D]
         out = torch.cat([out_1, out_2], dim=0)
         # [2*B, 2*B]
         sim_matrix = torch.exp(torch.mm(out, out.t().contiguous()) / 0.5)
-        mask = (torch.ones_like(sim_matrix) -
-                torch.eye(2 * 128, device=sim_matrix.device)).bool()
+        mask = (torch.ones_like(sim_matrix) - torch.eye(2 * bsz, device=sim_matrix.device)).bool()
         # [2*B, 2*B-1]
-        sim_matrix = sim_matrix.masked_select(mask).view(2 * 128, -1)
+        sim_matrix = sim_matrix.masked_select(mask).view(2 * bsz, -1)
 
         # compute loss
         pos_sim = torch.exp(torch.sum(out_1 * out_2, dim=-1) / 0.5)
