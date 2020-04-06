@@ -1,3 +1,5 @@
+![](RSNA_Data.png)
+
 运行步骤：
 一、准备数据
 1、在kaggle上下载好训练数据 https://www.kaggle.com/c/rsna-intracranial-hemorrhage-detection/data
