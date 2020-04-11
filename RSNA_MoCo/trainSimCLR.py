@@ -20,7 +20,7 @@ from NCE.NCEAverage import MemoryMoCo
 from NCE.NCECriterion import NCECriterion
 from NCE.NCECriterion import NCESoftmaxLoss
 import pdb
-os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 try:
     from apex import amp, optimizers
@@ -70,7 +70,7 @@ def parse_option():
 
     # dataset
     parser.add_argument('--train_txt', type=str,
-                        default="../experiments_configure/train100F.txt")
+                        default="../experiments_configure/train1F.txt")
     parser.add_argument('--dataset', type=str, default='imagenet100',
                         choices=['imagenet100', 'imagenet'])
     parser.add_argument('--data_folder', type=str,
@@ -143,12 +143,6 @@ def parse_option():
         os.makedirs(opt.tb_folder)
 
     return opt
-
-
-def moment_update(model, model_ema, m):
-    """ model_ema = m * model_ema + (1 - m) model """
-    for p1, p2 in zip(model.parameters(), model_ema.parameters()):
-        p2.data.mul_(m).add_(1-m, p1.detach().data)
 
 
 def get_shuffle_ids(bsz):
@@ -279,7 +273,7 @@ def main():
 
         time1 = time.time()
         if args.moco:
-            loss, prob = train_moco(
+            loss, prob, raw_loss = train_simCLR(
                 epoch, train_loader, model, contrast, criterion, optimizer, args)
         time2 = time.time()
         print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
@@ -287,6 +281,7 @@ def main():
         # tensorboard logger
         logger.log_value('ins_loss', loss, epoch)
         logger.log_value('ins_prob', prob, epoch)
+        logger.log_value('ins_raw_loss', raw_loss,epoch)
         logger.log_value(
             'learning_rate', optimizer.param_groups[0]['lr'], epoch)
 
@@ -330,7 +325,7 @@ def main():
         torch.cuda.empty_cache()
 
 
-def train_moco(epoch, train_loader, model, contrast, criterion, optimizer, opt):
+def train_simCLR(epoch, train_loader, model, contrast, criterion, optimizer, opt):
     """
     one epoch training for instance discrimination
     """
@@ -378,6 +373,7 @@ def train_moco(epoch, train_loader, model, contrast, criterion, optimizer, opt):
         pos_sim = torch.exp(torch.sum(out_1 * out_2, dim=-1) / 0.5)
         # [2*B]
         pos_sim = torch.cat([pos_sim, pos_sim], dim=0)
+        
         loss = (- torch.log(pos_sim / sim_matrix.sum(dim=-1))).mean()
         prob = out[:, 0].mean()
         # ===================backward=====================
@@ -409,7 +405,7 @@ def train_moco(epoch, train_loader, model, contrast, criterion, optimizer, opt):
             # print(out.shape)
             sys.stdout.flush()
 
-    return loss_meter.avg, prob_meter.avg
+    return loss_meter.avg, prob_meter.val, loss_meter.val
 
 
 if __name__ == '__main__':

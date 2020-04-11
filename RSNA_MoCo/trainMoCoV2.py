@@ -56,7 +56,7 @@ def parse_option():
     parser.add_argument('--lr_decay_epochs', type=str,
                         default='100,120,200', help='where to decay lr, can be a list')
     parser.add_argument('--lr_decay_rate', type=float,
-                        default=0.25, help='decay rate for learning rate')
+                        default=0. 25, help='decay rate for learning rate')
     parser.add_argument('--beta1', type=float,
                         default=0.5, help='beta1 for adam')
     parser.add_argument('--beta2', type=float,

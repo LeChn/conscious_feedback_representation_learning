@@ -2,6 +2,8 @@ import os
 
 
 def text_save(filename, data):  # filename为写入CSV文件的路径，data为要写入数据列表.
+    if os.path.exists(filename):
+        os.remove(filename)
     file = open(filename, 'a')
     for i in range(len(data)):
         s = data[i]
@@ -13,8 +15,8 @@ def text_save(filename, data):  # filename为写入CSV文件的路径，data为�
 if __name__ == '__main__':
     from random import shuffle
     import random
-    percent = 1
-    path = "/DATA2/Data/RSNA/RSNATR"
+    percent = 0.01
+    path = "/DATA2/Data/RSNA/RSNAFTR"
     files = os.listdir(path)
     shuffle(files)
     files = files[:int(percent*len(files))]

@@ -19,7 +19,7 @@ from util import adjust_learning_rate, AverageMeter
 from sklearn.metrics import log_loss
 from models.resnet import InsResNet50
 from models.LinearModel import LinearClassifierResNet
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
 import numpy as np
 
 def computeAUC(dataGT, dataPRED, classCount):
@@ -55,19 +55,19 @@ def parse_option():
 
     # model definition
     parser.add_argument('--model', type=str, default='resnet50', choices=['resnet50', 'resnet50x2', 'resnet50x4'])
-    parser.add_argument('--model_path', type=str, default='/home/ubuntu/wbm/MICCAI 2020/RSNAMODELS/MoCo0.999_softmax_16384_resnet50_lr_0.0001_decay_0.0001_bsz_128_crop_0.4_aug_NULL/ckpt_epoch_110.pth', help='the model to test')
+    parser.add_argument('--model_path', type=str, default='/home/jason/github/MIRL/RSNA_MoCo/MoCoV1/ckpt_epoch_200.pth', help='the model to test')
     parser.add_argument('--layer', type=int, default=6, help='which layer to evaluate')
 
     # crop
     parser.add_argument('--crop', type=float, default=0.2, help='minimum crop')
 
     # dataset
-    parser.add_argument('--train_txt', type=str, default="./experiments_configure/train1F.txt")
-    parser.add_argument('--val_txt', type=str, default="./experiments_configure/valF.txt")
+    parser.add_argument('--train_txt', type=str, default="../experiments_configure/train1F.txt")
+    parser.add_argument('--val_txt', type=str, default="../experiments_configure/valF.txt")
     parser.add_argument('--dataset', type=str, default='imagenet100', choices=['imagenet100', 'imagenet'])
-    parser.add_argument('--data_folder', type=str, default='/media/ubuntu/data')
-    parser.add_argument('--save_path', type=str, default='/home/ubuntu/wbm/MICCAI 2020/finetunemodel')
-    parser.add_argument('--tb_path', type=str, default='/home/ubuntu/wbm/MICCAI 2020/ts_bd')
+    parser.add_argument('--data_folder', type=str, default='/DATA2/Data/RSNA')
+    parser.add_argument('--save_path', type=str, default='.')
+    parser.add_argument('--tb_path', type=str, default='.')
     # augmentation
     parser.add_argument('--aug', type=str, default='CJ', choices=['NULL', 'CJ'])
     # add BN
@@ -300,15 +300,13 @@ def train(epoch, train_loader, model, classifier, criterion, optimizer, opt):
         outGT = torch.cat((outGT, target), 0)
 
         # ===================forward=====================
-        with torch.no_grad():
-            feat = model(input, opt.layer)
-            feat = feat.detach()
+        feat = model(input, opt.layer)
+        feat = feat.detach()
 
         output = classifier(feat)
         outPRED = torch.cat((outPRED, output.data), 0)
         loss = criterion(output, target.float())
         losses.update(loss.item(), input.size(0))
-
         # ===================backward=====================
         optimizer.zero_grad()
         loss.backward()

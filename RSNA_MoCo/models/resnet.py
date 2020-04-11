@@ -175,6 +175,7 @@ class ResNet(nn.Module):
         x = self.layer4(x)
         if layer == 5:
             return x
+        self.avgpool = nn.AvgPool2d(x.size(2), stride=1)
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         if layer == 6:
