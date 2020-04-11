@@ -1,4 +1,5 @@
 from __future__ import print_function
+import numpy as np
 from sklearn.metrics.ranking import roc_auc_score
 import os
 import sys
@@ -20,7 +21,7 @@ from sklearn.metrics import log_loss
 from models.resnet import InsResNet50
 from models.LinearModel import LinearClassifierResNet
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-import numpy as np
+
 
 def computeAUC(dataGT, dataPRED, classCount):
     outAUROC = []
@@ -31,59 +32,88 @@ def computeAUC(dataGT, dataPRED, classCount):
     mean_auc = float(np.mean(np.array(outAUROC)))
     return outAUROC, round(mean_auc, 4)
 
+
 def parse_option():
 
     hostname = socket.gethostname()
 
     parser = argparse.ArgumentParser('argument for training')
 
-    parser.add_argument('--print_freq', type=int, default=100, help='print frequency')
-    parser.add_argument('--tb_freq', type=int, default=500, help='tb frequency')
-    parser.add_argument('--save_freq', type=int, default=5000, help='save frequency')
-    parser.add_argument('--batch_size', type=int, default=128, help='batch_size')
-    parser.add_argument('--num_workers', type=int, default=8, help='num of workers to use')
-    parser.add_argument('--epochs', type=int, default=200, help='number of training epochs')
+    parser.add_argument('--print_freq', type=int,
+                        default=100, help='print frequency')
+    parser.add_argument('--tb_freq', type=int,
+                        default=500, help='tb frequency')
+    parser.add_argument('--save_freq', type=int,
+                        default=5000, help='save frequency')
+    parser.add_argument('--batch_size', type=int,
+                        default=128, help='batch_size')
+    parser.add_argument('--num_workers', type=int,
+                        default=8, help='num of workers to use')
+    parser.add_argument('--epochs', type=int, default=200,
+                        help='number of training epochs')
 
     # optimization
-    parser.add_argument('--learning_rate', type=float, default=1, help='learning rate')
-    parser.add_argument('--lr_decay_epochs', type=str, default='10,15,20', help='where to decay lr, can be a list')
-    parser.add_argument('--lr_decay_rate', type=float, default=0.2, help='decay rate for learning rate')
+    parser.add_argument('--learning_rate', type=float,
+                        default=1, help='learning rate')
+    parser.add_argument('--lr_decay_epochs', type=str,
+                        default='10,15,20', help='where to decay lr, can be a list')
+    parser.add_argument('--lr_decay_rate', type=float,
+                        default=0.2, help='decay rate for learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
-    parser.add_argument('--weight_decay', type=float, default=0, help='weight decay')
-    parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for Adam')
-    parser.add_argument('--beta2', type=float, default=0.999, help='beta2 for Adam')
+    parser.add_argument('--weight_decay', type=float,
+                        default=0, help='weight decay')
+    parser.add_argument('--beta1', type=float,
+                        default=0.5, help='beta1 for Adam')
+    parser.add_argument('--beta2', type=float,
+                        default=0.999, help='beta2 for Adam')
 
     # model definition
-    parser.add_argument('--model', type=str, default='resnet50', choices=['resnet50', 'resnet50x2', 'resnet50x4'])
-    parser.add_argument('--model_path', type=str, default='/home/ubuntu/wbm/MICCAI 2020/RSNAMODELS/MoCo0.999_softmax_16384_resnet50_lr_0.0001_decay_0.0001_bsz_128_crop_0.4_aug_NULL/ckpt_epoch_110.pth', help='the model to test')
-    parser.add_argument('--layer', type=int, default=6, help='which layer to evaluate')
+    parser.add_argument('--model', type=str, default='resnet50',
+                        choices=['resnet50', 'resnet50x2', 'resnet50x4'])
+    parser.add_argument('--model_path', type=str,
+                        default='/home/jason/github/MIRL/RSNA_MoCo/MoCoV1/ckpt_epoch_200.pth', help='the model to test')
+    parser.add_argument('--layer', type=int, default=6,
+                        help='which layer to evaluate')
 
     # crop
     parser.add_argument('--crop', type=float, default=0.2, help='minimum crop')
 
     # dataset
-    parser.add_argument('--train_txt', type=str, default="./experiments_configure/train1F.txt")
-    parser.add_argument('--val_txt', type=str, default="./experiments_configure/valF.txt")
-    parser.add_argument('--dataset', type=str, default='imagenet100', choices=['imagenet100', 'imagenet'])
-    parser.add_argument('--data_folder', type=str, default='/media/ubuntu/data')
-    parser.add_argument('--save_path', type=str, default='/home/ubuntu/wbm/MICCAI 2020/finetunemodel')
-    parser.add_argument('--tb_path', type=str, default='/home/ubuntu/wbm/MICCAI 2020/ts_bd')
+    parser.add_argument('--train_txt', type=str,
+                        default="../experiments_configure/train1F.txt")
+    parser.add_argument('--val_txt', type=str,
+                        default="../experiments_configure/valF.txt")
+    parser.add_argument('--dataset', type=str, default='imagenet100',
+                        choices=['imagenet100', 'imagenet'])
+    parser.add_argument('--data_folder', type=str,
+                        default='/DATA2/Data/RSNA')
+    parser.add_argument('--save_path', type=str,
+                        default='/home/jason/github/MIRL/RSNA_MoCo/finetunemodel')
+    parser.add_argument('--tb_path', type=str,
+                        default='/home/jason/github/MIRL/RSNA_MoCo/ts_bd')
     # augmentation
-    parser.add_argument('--aug', type=str, default='CJ', choices=['NULL', 'CJ'])
+    parser.add_argument('--aug', type=str, default='CJ',
+                        choices=['NULL', 'CJ'])
     # add BN
-    parser.add_argument('--bn', action='store_true', help='use parameter-free BN')
-    parser.add_argument('--cosine', action='store_true', help='use cosine annealing')
-    parser.add_argument('--adam', action='store_true', help='use adam optimizer')
+    parser.add_argument('--bn', action='store_true',
+                        help='use parameter-free BN')
+    parser.add_argument('--cosine', action='store_true',
+                        help='use cosine annealing')
+    parser.add_argument('--adam', action='store_true',
+                        help='use adam optimizer')
     # warmup
-    parser.add_argument('--warm', action='store_true', help='add warm-up setting')
-    parser.add_argument('--amp', action='store_true', help='using mixed precision')
-    parser.add_argument('--opt_level', type=str, default='O2', choices=['O1', 'O2'])
-    parser.add_argument('--syncBN', action='store_true', help='enable synchronized BN')
+    parser.add_argument('--warm', action='store_true',
+                        help='add warm-up setting')
+    parser.add_argument('--amp', action='store_true',
+                        help='using mixed precision')
+    parser.add_argument('--opt_level', type=str,
+                        default='O2', choices=['O1', 'O2'])
+    parser.add_argument('--syncBN', action='store_true',
+                        help='enable synchronized BN')
     # GPU setting
     parser.add_argument('--gpu', default='0', type=int, help='GPU id to use.')
 
     opt = parser.parse_args()
-
 
     if opt.dataset == 'imagenet':
         if 'alexnet' not in opt.model:
@@ -110,7 +140,8 @@ def parse_option():
     if opt.cosine:
         opt.model_name = '{}_cosine'.format(opt.model_name)
 
-    opt.tb_folder = os.path.join(opt.tb_path, opt.model_name + '_layer{}'.format(opt.layer))
+    opt.tb_folder = os.path.join(
+        opt.tb_path, opt.model_name + '_layer{}'.format(opt.layer))
     if not os.path.isdir(opt.tb_folder):
         os.makedirs(opt.tb_folder)
 
@@ -171,19 +202,22 @@ def main():
     f_train.close()
     trainfiles = [s.replace('\n', '') for s in c_train]
     csv_label = "train.csv"
-    train_dataset = RSNA_Data_finetune(trainfiles, csv_label, train_folder, train_transform)
+    train_dataset = RSNA_Data_finetune(
+        trainfiles, csv_label, train_folder, train_transform)
     #val_txt = "/media/ubuntu/data/valF.txt"
     f_val = open(val_txt)
     c_val = f_val.readlines()
     f_val.close()
     valfiles = [s.replace('\n', '') for s in c_val]
-    val_dataset = RSNA_Data_finetune(valfiles, csv_label, val_folder, val_transform)
+    val_dataset = RSNA_Data_finetune(
+        valfiles, csv_label, val_folder, val_transform)
 
-    print("Labled data for training",len(train_dataset))
+    print("Labled data for training", len(train_dataset))
     train_sampler = None
 
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
+        train_dataset, batch_size=args.batch_size, shuffle=(
+            train_sampler is None),
         num_workers=args.num_workers, pin_memory=True, sampler=train_sampler)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=args.batch_size, shuffle=False,
@@ -205,7 +239,8 @@ def main():
     print('==> loading pre-trained model')
     ckpt = torch.load(args.model_path)
     model.load_state_dict(ckpt['model'])
-    print("==> loaded checkpoint '{}' (epoch {})".format(args.model_path, ckpt['epoch']))
+    print("==> loaded checkpoint '{}' (epoch {})".format(
+        args.model_path, ckpt['epoch']))
     print('==> done')
 
     model = model.cuda()
@@ -236,7 +271,8 @@ def main():
         # eta_min = args.learning_rate * (args.lr_decay_rate ** 3) * 0.1
         # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs, eta_min, last_epoch)
         eta_min = args.learning_rate * (args.lr_decay_rate ** 3) * 0.1
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs, eta_min, -1)
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, args.epochs, eta_min, -1)
         # dummy loop to catch up with current epoch
         for i in range(1, args.start_epoch):
             scheduler.step()
@@ -248,11 +284,13 @@ def main():
         print("==> training...")
 
         time1 = time.time()
-        train_auc = train(epoch, train_loader, model, classifier, criterion, optimizer, args)
+        train_auc = train(epoch, train_loader, model,
+                          classifier, criterion, optimizer, args)
         time2 = time.time()
         print('train epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
         print("==> testing...")
-        auc, mean_auc, test_loss = validate_multilabel(val_loader, model, classifier, criterion, args)
+        auc, mean_auc, test_loss = validate_multilabel(
+            val_loader, model, classifier, criterion, args)
         if mean_auc > best_test_auc:
             best_test_auc = mean_auc
         # save the best model
@@ -324,8 +362,8 @@ def train(epoch, train_loader, model, classifier, criterion, optimizer, opt):
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
-                epoch, idx, len(train_loader), batch_time=batch_time,
-                data_time=data_time, loss=losses))
+                      epoch, idx, len(train_loader), batch_time=batch_time,
+                      data_time=data_time, loss=losses))
             #print('TRAIN Logloss is {}, mean_Logloss is {}'.format(Logloss, mean_ll))
             sys.stdout.flush()
     auc_train, mean_auc_train = computeAUC(outGT, outPRED, 6)
@@ -366,14 +404,13 @@ def validate_multilabel(val_loader, model, classifier, criterion, opt):
                 print('Test: [{0}/{1}]\t'
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
-                    idx, len(val_loader), batch_time=batch_time, loss=losses))
+                          idx, len(val_loader), batch_time=batch_time, loss=losses))
                 #print('Test Logloss is {},mean_Logloss is {:.3f}'.format(Logloss, mean_ll))
     auc_test, mean_auc_test = computeAUC(outGT, outPRED, 6)
     '''auc = [round(x, 4) for x in auc]
     Logloss = [round(x, 4) for x in Logloss]'''
     print('All Test AUC is {}, Mean_AUC IS {}'.format(auc_test, mean_auc_test))
     return auc_test, mean_auc_test, losses.avg
-
 
 
 if __name__ == '__main__':
