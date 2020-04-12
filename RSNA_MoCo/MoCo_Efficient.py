@@ -4,6 +4,7 @@ from sklearn.metrics.ranking import roc_auc_score
 import os
 import sys
 import time
+import itertools
 import torch
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
@@ -20,6 +21,7 @@ from util import adjust_learning_rate, AverageMeter
 from sklearn.metrics import log_loss
 from models.resnet import InsResNet50
 from models.LinearModel import LinearClassifierResNet
+import tensorboard_logger as tb_logger
 os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
 
 
@@ -49,14 +51,14 @@ def parse_option():
                         default=128, help='batch_size')
     parser.add_argument('--num_workers', type=int,
                         default=8, help='num of workers to use')
-    parser.add_argument('--epochs', type=int, default=200,
+    parser.add_argument('--epochs', type=int, default=100,
                         help='number of training epochs')
 
     # optimization
     parser.add_argument('--learning_rate', type=float,
-                        default=1, help='learning rate')
+                        default=0.03, help='learning rate')
     parser.add_argument('--lr_decay_epochs', type=str,
-                        default='10,15,20', help='where to decay lr, can be a list')
+                        default='100,120', help='where to decay lr, can be a list')
     parser.add_argument('--lr_decay_rate', type=float,
                         default=0.2, help='decay rate for learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
@@ -71,7 +73,7 @@ def parse_option():
     parser.add_argument('--model', type=str, default='resnet50',
                         choices=['resnet50', 'resnet50x2', 'resnet50x4'])
     parser.add_argument('--model_path', type=str,
-                        default='/home/jason/github/MIRL/RSNA_MoCo/MoCoV1/ckpt_epoch_200.pth', help='the model to test')
+                        default='/home/charlietran/rsnaproject/MIRL-master/modelpath/ckpt_epoch_110.pth', help='the model to test')
     parser.add_argument('--layer', type=int, default=6,
                         help='which layer to evaluate')
 
@@ -249,12 +251,12 @@ def main():
     criterion = torch.nn.BCEWithLogitsLoss().cuda(args.gpu)
 
     if not args.adam:
-        optimizer = torch.optim.SGD(classifier.parameters(),
+        optimizer = torch.optim.SGD(itertools.chain(model.parameters(), classifier.parameters()),
                                     lr=args.learning_rate,
                                     momentum=args.momentum,
                                     weight_decay=args.weight_decay)
     else:
-        optimizer = torch.optim.Adam(classifier.parameters(),
+        optimizer = torch.optim.Adam(itertools.chain(model.parameters(), classifier.parameters()),
                                      lr=args.learning_rate,
                                      betas=(args.beta1, args.beta2),
                                      weight_decay=args.weight_decay,
@@ -275,6 +277,8 @@ def main():
         # dummy loop to catch up with current epoch
         for i in range(1, args.start_epoch):
             scheduler.step()
+
+    logger = tb_logger.Logger(logdir=args.tb_folder, flush_secs=2)
     for epoch in range(args.start_epoch, args.epochs + 1):
         if args.cosine:
             scheduler.step()
@@ -297,6 +301,9 @@ def main():
             lowest_loss = test_loss
             print('saving best model!')
             torch.save(classifier.state_dict(), "best_classifier.pth")'''
+        logger.log_value('mean_auc', mean_auc, epoch)
+        logger.log_value('test_loss', test_loss, epoch)
+        logger.log_value('best_auc', best_test_auc, epoch)
         print('best test auc is:', best_test_auc)
         pass
 

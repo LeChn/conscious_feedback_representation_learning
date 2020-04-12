@@ -236,6 +236,8 @@ def main():
         # dummy loop to catch up with current epoch
         for i in range(1, args.start_epoch):
             scheduler.step()
+
+    logger = tb_logger.Logger(logdir=args.tb_folder, flush_secs=2)
     for epoch in range(args.start_epoch, args.epochs + 1):
         if args.cosine:
             scheduler.step()
@@ -256,6 +258,9 @@ def main():
             lowest_loss = test_loss
             print('saving best model!')
             torch.save(classifier.state_dict(), "best_classifier.pth")'''
+        logger.log_value('mean_auc', mean_auc, epoch)
+        logger.log_value('test_loss', test_loss, epoch)
+        logger.log_value('best_auc', best_test_auc, epoch)
         print('best test AUC is:', best_test_auc)
         pass
 
