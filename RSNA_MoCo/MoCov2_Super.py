@@ -1,4 +1,5 @@
 from __future__ import print_function
+from dataset import ImageFolderInstance
 import os
 import sys
 import time
@@ -6,21 +7,21 @@ import torch
 import torch.backends.cudnn as cudnn
 import argparse
 import socket
+import itertools
+from models.LinearModel import LinearClassifierResNet
 from dataset import RSNA_Data
 #from dataset import ACDC_Data
 import tensorboard_logger as tb_logger
-
+from MoCo_Linear import train
 from torchvision import transforms, datasets
 from util import adjust_learning_rate, AverageMeter
-
-from models.resnet import InsResNet50
+from MoCov2_factory import train_supervised, validate_multilabel, val_loader, train_loader_supervised
 from models.simCLR import simCLR
 from NCE.NCEAverage import MemoryInsDis
 from NCE.NCEAverage import MemoryMoCo
 from NCE.NCECriterion import NCECriterion
 from NCE.NCECriterion import NCESoftmaxLoss
-import pdb
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 try:
     from apex import amp, optimizers
@@ -38,7 +39,7 @@ def parse_option():
     parser = argparse.ArgumentParser('argument for training')
 
     parser.add_argument('--print_freq', type=int,
-                        default=20, help='print frequency')
+                        default=100, help='print frequency')
     parser.add_argument('--tb_freq', type=int,
                         default=500, help='tb frequency')
     parser.add_argument('--save_freq', type=int,
@@ -52,7 +53,7 @@ def parse_option():
 
     # optimization
     parser.add_argument('--learning_rate', type=float,
-                        default=0.00001, help='learning rate')
+                        default=1, help='learning rate')
     parser.add_argument('--lr_decay_epochs', type=str,
                         default='100,120,200', help='where to decay lr, can be a list')
     parser.add_argument('--lr_decay_rate', type=float,
@@ -69,15 +70,13 @@ def parse_option():
     parser.add_argument('--crop', type=float, default=0.4, help='minimum crop')
 
     # dataset
-    parser.add_argument('--train_txt', type=str,
-                        default="../experiments_configure/train1F.txt")
     parser.add_argument('--dataset', type=str, default='imagenet100',
                         choices=['imagenet100', 'imagenet'])
     parser.add_argument('--data_folder', type=str,
                         default="/DATA2/Data/RSNA/RSNAFTR")
-
+    # /home/charlietran/RepresentationLearning/kaggle/c/13451/rsna-intracranial-hemorrhage-detection
     # resume
-    parser.add_argument('--resume', default='', type=str,
+    parser.add_argument('--resume', default=False, type=str,
                         help='path to latest checkpoint (default: none)')
 
     # augmentation setting
@@ -94,9 +93,9 @@ def parse_option():
     parser.add_argument('--model', type=str, default='resnet50',
                         choices=['resnet50', 'resnet50x2', 'resnet50x4'])
     parser.add_argument('--model_path', type=str,
-                        default='.')
+                        default='/home/jason/github/MIRL/RSNA_MoCo/MoCoSuper/')
     parser.add_argument('--tb_path', type=str,
-                        default='.')
+                        default='/home/jason/github/MIRL/RSNA_MoCo/ts_bd')
     # loss function
     parser.add_argument('--softmax', default=True,
                         help='using softmax contrastive loss rather than NCE')
@@ -121,7 +120,7 @@ def parse_option():
         opt.lr_decay_epochs.append(int(it))
 
     opt.method = 'softmax' if opt.softmax else 'nce'
-    prefix = 'SimCLR{}'.format(opt.alpha) if opt.moco else 'InsDis'
+    prefix = 'MoCoV2Super{}'.format(opt.alpha) if opt.moco else 'InsDis'
 
     opt.model_name = '{}_{}_{}_{}_lr_{}_decay_{}_bsz_{}_crop_{}'.format(prefix, opt.method, opt.nce_k, opt.model,
                                                                         opt.learning_rate, opt.weight_decay,
@@ -145,6 +144,12 @@ def parse_option():
     return opt
 
 
+def moment_update(model, model_ema, m):
+    """ model_ema = m * model_ema + (1 - m) model """
+    for p1, p2 in zip(model.parameters(), model_ema.parameters()):
+        p2.data.mul_(m).add_(1-m, p1.detach().data)
+
+
 def get_shuffle_ids(bsz):
     """generate shuffle ids for ShuffleBN"""
     forward_inds = torch.randperm(bsz).long().cuda()
@@ -157,7 +162,7 @@ def get_shuffle_ids(bsz):
 def main():
 
     args = parse_option()
-    train_txt = args.train_txt
+
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
 
@@ -189,7 +194,7 @@ def main():
         raise NotImplemented('augmentation not supported: {}'.format(args.aug))
     #train_dataset = ACDC_Data(transform=train_transform, two_crop=True)
     #train_dataset = ImageFolderInstance(data_folder, transform=train_transform, two_crop=args.moco)
-
+    train_txt = "../experiments_configure/train100F.txt"
     f_train = open(train_txt)
     c_train = f_train.readlines()
     f_train.close()
@@ -208,39 +213,59 @@ def main():
     if args.model == 'resnet50':
         model = simCLR()
         #model = torch.nn.DataParallel(model)
-    elif args.model == 'resnet50x2':
-        model = simCLR(width=2)
-    elif args.model == 'resnet50x4':
-        model = simCLR(width=4)
+        if args.moco:
+            model_ema = simCLR()
+            #model_ema = torch.nn.DataParallel(model_ema)
+    # elif args.model == 'resnet50x2':
+    #     model = InsResNet50(width=2)
+    #     if args.moco:
+    #         model_ema = InsResNet50(width=2)
+    # elif args.model == 'resnet50x4':
+    #     model = InsResNet50(width=4)
+    #     if args.moco:
+    #         model_ema = InsResNet50(width=4)
     else:
         raise NotImplementedError('model not supported {}'.format(args.model))
     '''model = Unet(encoder_weights="None", in_channels=1)
     model_ema = Unet(encoder_weights="None", in_channels=1)'''
 
     # copy weights from `model' to `model_ema'
+    if args.moco:
+        moment_update(model, model_ema, 0)
 
     # set the contrast memory and criterion
-    contrast = MemoryInsDis(128, n_data, args.nce_k,
-                            args.nce_t, args.nce_m, args.softmax).cuda(args.gpu)
+    if args.moco:
+        #contrast = MemoryMoCo(128, n_data, args.nce_k, args.nce_t, args.softmax).cuda(args.gpu)
+        contrast = MemoryMoCo(128, n_data, args.nce_k,
+                              args.nce_t, args.softmax).cuda()
+    else:
+        contrast = MemoryInsDis(
+            128, n_data, args.nce_k, args.nce_t, args.nce_m, args.softmax).cuda(args.gpu)
 
     criterion = NCESoftmaxLoss() if args.softmax else NCECriterion(n_data)
+    criterion_supervised = torch.nn.BCEWithLogitsLoss().cuda(args.gpu)
     criterion = criterion.cuda()
 
     model = model.cuda()
+    classifier = LinearClassifierResNet(6, 6, 'avg', 1).cuda()
+    if args.moco:
+        model_ema = model_ema.cuda()
 
+    # encoder
     optimizer = torch.optim.SGD(model.parameters(),
                                 lr=args.learning_rate,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
-    # optimizer_mlp = torch.optim.SGD(
-    #     simMLP.parameters(), lr=0.1, weight_decay=args.weight_decay)
+    # encoder + linear  classifier
+    optimizer_supervised = torch.optim.SGD(itertools.chain(model.parameters(), classifier.parameters()),
+                                           lr=args.learning_rate,
+                                           momentum=args.momentum,
+                                           weight_decay=args.weight_decay)
+
     cudnn.benchmark = True
-    if args.amp:
-        model, optimizer = amp.initialize(
-            model, optimizer, opt_level=args.opt_level)
 
     # optionally resume from a checkpoint
-    args.start_epoch = 0
+    args.start_epoch = 1
     if args.resume:
         if os.path.isfile(args.resume):
             print("=> loading checkpoint '{}'".format(args.resume))
@@ -250,6 +275,8 @@ def main():
             model.load_state_dict(checkpoint['model'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             contrast.load_state_dict(checkpoint['contrast'])
+            if args.moco:
+                model_ema.load_state_dict(checkpoint['model_ema'])
 
             if args.amp and checkpoint['opt'].amp:
                 print('==> resuming amp state_dict')
@@ -264,24 +291,38 @@ def main():
 
     # tensorboard
     logger = tb_logger.Logger(logdir=args.tb_folder, flush_secs=2)
-
+    best_test_auc = 0
     # routine
     for epoch in range(args.start_epoch, args.epochs + 1):
 
         adjust_learning_rate(epoch, args, optimizer)
         print("==> training...")
-
         time1 = time.time()
         if args.moco:
-            loss, prob, raw_loss = train_simCLR(
-                epoch, train_loader, model, contrast, criterion, optimizer, args)
+            loss, prob = train_moco(
+                epoch, train_loader, model, model_ema, contrast, criterion, optimizer, args)
+            mean_auc_train, train_loss = train_supervised(
+                epoch, train_loader_supervised, model, classifier, criterion_supervised, optimizer_supervised, args)
+            auc_test, mean_auc_test, test_loss = validate_multilabel(
+                val_loader, model, classifier, criterion_supervised, args)
+            #print("train auc",mean_auc_train)
+            print("val auc", mean_auc_test)
+            if mean_auc_test > best_test_auc:
+                best_test_auc = mean_auc_test
+                torch.save(classifier.state_dict(), "best_classifier.pth")
+                print("Saved!")
+            logger.log_value('mean_auc', mean_auc_test, epoch)
+            logger.log_value('mean_auc_train', mean_auc_train, epoch)
+            logger.log_value('train_loss', train_loss, epoch)
+            logger.log_value('test_loss', test_loss, epoch)
+            logger.log_value('best_auc', best_test_auc, epoch)
+            print("best test auc is", best_test_auc)
         time2 = time.time()
         print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
 
         # tensorboard logger
         logger.log_value('ins_loss', loss, epoch)
         logger.log_value('ins_prob', prob, epoch)
-        logger.log_value('ins_raw_loss', raw_loss,epoch)
         logger.log_value(
             'learning_rate', optimizer.param_groups[0]['lr'], epoch)
 
@@ -295,6 +336,8 @@ def main():
                 'optimizer': optimizer.state_dict(),
                 'epoch': epoch,
             }
+            if args.moco:
+                state['model_ema'] = model_ema.state_dict()
             if args.amp:
                 state['amp'] = amp.state_dict()
             save_file = os.path.join(
@@ -312,6 +355,8 @@ def main():
             'optimizer': optimizer.state_dict(),
             'epoch': epoch,
         }
+        if args.moco:
+            state['model_ema'] = model_ema.state_dict()
         if args.amp:
             state['amp'] = amp.state_dict()
         save_file = os.path.join(args.model_folder, 'current.pth')
@@ -325,17 +370,19 @@ def main():
         torch.cuda.empty_cache()
 
 
-def train_simCLR(epoch, train_loader, model, contrast, criterion, optimizer, opt):
+def train_moco(epoch, train_loader, model, model_ema, contrast, criterion, optimizer, opt):
     """
     one epoch training for instance discrimination
     """
-    print("Train SimCLR!")
+    print("Train MoCO!")
     model.train()
+    model_ema.eval()
 
     def set_bn_train(m):
         classname = m.__class__.__name__
         if classname.find('BatchNorm') != -1:
             m.train()
+    model_ema.apply(set_bn_train)
 
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -356,24 +403,22 @@ def train_simCLR(epoch, train_loader, model, contrast, criterion, optimizer, opt
         else:
             inputs = inputs.cuda()
         #index = index.cuda(opt.gpu, non_blocking=True)
+
         # ===================forward=====================
         x1, x2 = torch.split(inputs, [1, 1], dim=1)
-        
-        feature_1, out_1 = model(x1)
-        feature_2, out_2 = model(x2)
-        # [2*B, D]
-        out = torch.cat([out_1, out_2], dim=0)
-        # [2*B, 2*B]
-        sim_matrix = torch.exp(torch.mm(out, out.t().contiguous()) / 0.5)
-        mask = (torch.ones_like(sim_matrix) - torch.eye(2 * bsz, device=sim_matrix.device)).bool()
-        # [2*B, 2*B-1]
-        sim_matrix = sim_matrix.masked_select(mask).view(2 * bsz, -1)
 
-        # compute loss
-        pos_sim = torch.exp(torch.sum(out_1 * out_2, dim=-1) / 0.5)
-        # [2*B]
-        pos_sim = torch.cat([pos_sim, pos_sim], dim=0)
-        loss = (- torch.log(pos_sim / sim_matrix.sum(dim=-1))).mean()
+        # ids for ShuffleBN
+        shuffle_ids, reverse_ids = get_shuffle_ids(bsz)
+
+        feat_q = model(x1)[1]
+        with torch.no_grad():
+            x2 = x2[shuffle_ids]
+            feat_k = model_ema(x2)[1]
+            feat_k = feat_k[reverse_ids]
+
+        out = contrast(feat_q, feat_k)
+
+        loss = criterion(out)
         prob = out[:, 0].mean()
         # ===================backward=====================
         optimizer.zero_grad()
@@ -387,6 +432,8 @@ def train_simCLR(epoch, train_loader, model, contrast, criterion, optimizer, opt
         # ===================meters=====================
         loss_meter.update(loss.item(), bsz)
         prob_meter.update(prob.item(), bsz)
+
+        moment_update(model, model_ema, opt.alpha)
 
         torch.cuda.synchronize()
         batch_time.update(time.time() - end)
@@ -404,7 +451,7 @@ def train_simCLR(epoch, train_loader, model, contrast, criterion, optimizer, opt
             # print(out.shape)
             sys.stdout.flush()
 
-    return loss_meter.avg, prob_meter.val, loss_meter.val
+    return loss_meter.avg, prob_meter.avg
 
 
 if __name__ == '__main__':

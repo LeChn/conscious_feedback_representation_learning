@@ -394,7 +394,7 @@ def train_moco(epoch, train_loader, model, model_ema, contrast, criterion, optim
             inputs = inputs.cuda()
         #index = index.cuda(opt.gpu, non_blocking=True)
         # ===================forward=====================
-        # (224,224) => 128
+        #(224,224) => 128
         x1, x2 = torch.split(inputs, [1, 1], dim=1)
 
         # ids for ShuffleBN

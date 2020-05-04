@@ -4,7 +4,6 @@ from sklearn.metrics.ranking import roc_auc_score
 import os
 import sys
 import time
-import itertools
 import torch
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
@@ -21,9 +20,7 @@ from util import adjust_learning_rate, AverageMeter
 from sklearn.metrics import log_loss
 from models.resnet import InsResNet50
 from models.LinearModel import LinearClassifierResNet
-import tensorboard_logger as tb_logger
-import pdb
-os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 
 def computeAUC(dataGT, dataPRED, classCount):
@@ -31,8 +28,12 @@ def computeAUC(dataGT, dataPRED, classCount):
     datanpGT = dataGT.cpu().numpy()
     datanpPRED = dataPRED.cpu().numpy()
     for i in range(classCount):
+        if True in np.isnan(datanpPRED[:, i]):
+            print("nan is in")
+            break
         outAUROC.append(roc_auc_score(datanpGT[:, i], datanpPRED[:, i]))
-    mean_auc = float(np.mean(np.array(outAUROC)))
+    mean_auc = np.mean(np.array(outAUROC))
+    mean_auc = float(mean_auc)
     return outAUROC, round(mean_auc, 4)
 
 
@@ -52,12 +53,12 @@ def parse_option():
                         default=128, help='batch_size')
     parser.add_argument('--num_workers', type=int,
                         default=8, help='num of workers to use')
-    parser.add_argument('--epochs', type=int, default=100,
+    parser.add_argument('--epochs', type=int, default=60,
                         help='number of training epochs')
 
     # optimization
     parser.add_argument('--learning_rate', type=float,
-                        default=0.03, help='learning rate')
+                        default=0.1, help='learning rate')
     parser.add_argument('--lr_decay_epochs', type=str,
                         default='100,120', help='where to decay lr, can be a list')
     parser.add_argument('--lr_decay_rate', type=float,
@@ -74,7 +75,7 @@ def parse_option():
     parser.add_argument('--model', type=str, default='resnet50',
                         choices=['resnet50', 'resnet50x2', 'resnet50x4'])
     parser.add_argument('--model_path', type=str,
-                        default='/home/charlietran/rsnaproject/MIRL-master/modelpath/ckpt_epoch_110.pth', help='the model to test')
+                        default='MoCoV2/ckpt_epoch_200.pth', help='the model to test')
     parser.add_argument('--layer', type=int, default=6,
                         help='which layer to evaluate')
 
@@ -86,11 +87,9 @@ def parse_option():
                         default="../experiments_configure/train1F.txt")
     parser.add_argument('--val_txt', type=str,
                         default="../experiments_configure/valF.txt")
-    parser.add_argument('--dataset', type=str, default='imagenet100',
-                        choices=['imagenet100', 'imagenet'])
     parser.add_argument('--data_folder', type=str, default='/DATA2/Data/RSNA')
     parser.add_argument('--save_path', type=str,
-                        default='/home/jason/github/MIRL/RSNA_MoCo/finetunemodel')
+                        default='/home/jason/github/MIRL/RSNA_MoCo/MoCoSuper')
     parser.add_argument('--tb_path', type=str,
                         default='/home/jason/github/MIRL/RSNA_MoCo/ts_bd')
     # augmentation
@@ -116,10 +115,6 @@ def parse_option():
     parser.add_argument('--gpu', default='0', type=int, help='GPU id to use.')
 
     opt = parser.parse_args()
-
-    if opt.dataset == 'imagenet':
-        if 'alexnet' not in opt.model:
-            opt.crop = 0.08
 
     iterations = opt.lr_decay_epochs.split(',')
     opt.lr_decay_epochs = list([])
@@ -155,158 +150,80 @@ def parse_option():
     return opt
 
 
-def main():
-    args = parse_option()
-    #train_txt = "/media/ubuntu/data/train5F.txt"
-    train_txt = args.train_txt
-    val_txt = args.val_txt
-    global best_acc1
-    best_acc1 = 0
-    lowest_loss = 100
-    if args.gpu is not None:
-        print("Use GPU: {} for training".format(args.gpu))
+args = parse_option()
+train_txt = args.train_txt
+val_txt = args.val_txt
+global best_acc1
+best_acc1 = 0
+lowest_loss = 100
+if args.gpu is not None:
+    print("Use GPU: {} for training".format(args.gpu))
     # set the data loader
-    train_folder = os.path.join(args.data_folder, 'RSNAFTR')
-    val_folder = os.path.join(args.data_folder, 'RSNAFVAL')
-    best_test_auc = 0
-    image_size = 224
-    crop_padding = 32
-    mean = [0.5]
-    std = [0.5]
-    normalize = transforms.Normalize(mean=mean, std=std)
+train_folder = os.path.join(args.data_folder, 'RSNAFTR')
+val_folder = os.path.join(args.data_folder, 'RSNAFVAL')
+best_test_auc = 0
+image_size = 224
+crop_padding = 32
+mean = [0.5]
+std = [0.5]
+normalize = transforms.Normalize(mean=mean, std=std)
 
-    if args.aug == 'NULL':
-        train_transform = transforms.Compose([
-            transforms.RandomResizedCrop(image_size, scale=(args.crop, 1.)),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ])
-    elif args.aug == 'CJ':
-        train_transform = transforms.Compose([
-            transforms.RandomResizedCrop(image_size, scale=(args.crop, 1.)),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ])
-    else:
-        raise NotImplemented('augmentation not supported: {}'.format(args.aug))
-    val_transform = transforms.Compose([
-        transforms.Resize(image_size + crop_padding),
-        transforms.CenterCrop(image_size),
+if args.aug == 'NULL':
+    train_transform = transforms.Compose([
+        transforms.RandomResizedCrop(image_size, scale=(args.crop, 1.)),
+        transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        normalize])
-    #train_txt = "/media/ubuntu/data/train5F.txt"
-    f_train = open(train_txt)
-    c_train = f_train.readlines()
-    f_train.close()
-    trainfiles = [s.replace('\n', '') for s in c_train]
-    csv_label = "train.csv"
-    train_dataset = RSNA_Data_finetune(
-        trainfiles, csv_label, train_folder, train_transform)
-    #val_txt = "/media/ubuntu/data/valF.txt"
-    f_val = open(val_txt)
-    c_val = f_val.readlines()
-    f_val.close()
-    valfiles = [s.replace('\n', '') for s in c_val]
-    val_dataset = RSNA_Data_finetune(
-        valfiles, csv_label, val_folder, val_transform)
+        normalize,
+    ])
+elif args.aug == 'CJ':
+    train_transform = transforms.Compose([
+        transforms.RandomResizedCrop(image_size, scale=(args.crop, 1.)),
+        transforms.RandomGrayscale(p=0.2),
+        transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        normalize,
+    ])
+else:
+    raise NotImplemented('augmentation not supported: {}'.format(args.aug))
+val_transform = transforms.Compose([
+    transforms.Resize(image_size + crop_padding),
+    transforms.CenterCrop(image_size),
+    transforms.ToTensor(),
+    normalize])
+#train_txt = "/media/ubuntu/data/train5F.txt"
+f_train = open(train_txt)
+c_train = f_train.readlines()
+f_train.close()
+trainfiles = [s.replace('\n', '') for s in c_train]
+csv_label = "train.csv"
+train_dataset = RSNA_Data_finetune(
+    trainfiles, csv_label, train_folder, train_transform)
+#val_txt = "/media/ubuntu/data/valF.txt"
+f_val = open(val_txt)
+c_val = f_val.readlines()
+f_val.close()
+valfiles = [s.replace('\n', '') for s in c_val]
+val_dataset = RSNA_Data_finetune(
+    valfiles, csv_label, val_folder, val_transform)
 
-    print("Labled data for training", len(train_dataset))
-    train_sampler = None
+print("Labled data for training", len(train_dataset))
+train_sampler = None
 
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(
-            train_sampler is None),
-        num_workers=args.num_workers, pin_memory=True, sampler=train_sampler)
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.num_workers, pin_memory=True)
+train_loader_supervised = torch.utils.data.DataLoader(
+    train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
+    num_workers=args.num_workers, pin_memory=True, sampler=train_sampler)
+val_loader = torch.utils.data.DataLoader(
+    val_dataset, batch_size=args.batch_size, shuffle=False,
+    num_workers=args.num_workers, pin_memory=True)
 
-    # create model and optimizer
-    if args.model == 'resnet50':
-        model = InsResNet50()
-        classifier = LinearClassifierResNet(args.layer, args.n_label, 'avg', 1)
-    elif args.model == 'resnet50x2':
-        model = InsResNet50(width=2)
-        classifier = LinearClassifierResNet(args.layer, args.n_label, 'avg', 2)
-    elif args.model == 'resnet50x4':
-        model = InsResNet50(width=4)
-        classifier = LinearClassifierResNet(args.layer, args.n_label, 'avg', 4)
-    else:
-        raise NotImplementedError('model not supported {}'.format(args.model))
-
-    print('==> loading pre-trained model')
-    ckpt = torch.load(args.model_path)
-    model.load_state_dict(ckpt['model'])
-    print("==> loaded checkpoint '{}' (epoch {})".format(
-        args.model_path, ckpt['epoch']))
-    print('==> done')
-
-    model = model.cuda()
-    classifier = classifier.cuda()
-
-    #criterion = torch.nn.CrossEntropyLoss().cuda(args.gpu)
-    criterion = torch.nn.BCEWithLogitsLoss().cuda(args.gpu)
-
-    if not args.adam:
-        optimizer = torch.optim.SGD(itertools.chain(model.parameters(), classifier.parameters()),
-                                    lr=args.learning_rate,
-                                    momentum=args.momentum,
-                                    weight_decay=args.weight_decay)
-    else:
-        optimizer = torch.optim.Adam(itertools.chain(model.parameters(), classifier.parameters()),
-                                     lr=args.learning_rate,
-                                     betas=(args.beta1, args.beta2),
-                                     weight_decay=args.weight_decay,
-                                     eps=1e-8)
-
-    model.eval()
-    cudnn.benchmark = True
-    args.start_epoch = 1
-
-    # set cosine annealing scheduler
-    if args.cosine:
-        # last_epoch = args.start_epoch - 2
-        # eta_min = args.learning_rate * (args.lr_decay_rate ** 3) * 0.1
-        # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs, eta_min, last_epoch)
-        eta_min = args.learning_rate * (args.lr_decay_rate ** 3) * 0.1
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, args.epochs, eta_min, -1)
-        # dummy loop to catch up with current epoch
-        for i in range(1, args.start_epoch):
-            scheduler.step()
-
-    logger = tb_logger.Logger(logdir=args.tb_folder, flush_secs=2)
-    for epoch in range(args.start_epoch, args.epochs + 1):
-        if args.cosine:
-            scheduler.step()
-        else:
-            adjust_learning_rate(epoch, args, optimizer)
-        print("==> training...")
-
-        time1 = time.time()
-        train_auc = train(epoch, train_loader, model,
-                          classifier, criterion, optimizer, args)
-        time2 = time.time()
-        print('train epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
-        print("==> testing...")
-        auc, mean_auc, test_loss = validate_multilabel(
-            val_loader, model, classifier, criterion, args)
-        if mean_auc > best_test_auc:
-            best_test_auc = mean_auc
-        # save the best model
-        '''if test_loss < lowest_loss:
-            lowest_loss = test_loss
-            print('saving best model!')
-            torch.save(classifier.state_dict(), "best_classifier.pth")'''
-        logger.log_value('mean_auc', mean_auc, epoch)
-        logger.log_value('test_loss', test_loss, epoch)
-        logger.log_value('best_auc', best_test_auc, epoch)
-        print('best test auc is:', best_test_auc)
-        pass
+# create model and optimizer
+if args.model == 'resnet50':
+    model = InsResNet50()
+    classifier = LinearClassifierResNet(args.layer, args.n_label, 'avg', 1)
+model = model.cuda()
+classifier = classifier.cuda()
+criterion = torch.nn.BCEWithLogitsLoss().cuda(args.gpu)
 
 
 def set_lr(optimizer, lr):
@@ -317,7 +234,7 @@ def set_lr(optimizer, lr):
         param_group['lr'] = lr
 
 
-def train(epoch, train_loader, model, classifier, criterion, optimizer, opt):
+def train_supervised(epoch, train_loader, model, classifier, criterion, optimizer, opt):
     """
     one epoch training
     """
@@ -336,21 +253,23 @@ def train(epoch, train_loader, model, classifier, criterion, optimizer, opt):
     for idx, (input, target) in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
-        pdb.set_trace()
 
-        if opt.gpu is not None:
-            input = input.cuda(opt.gpu, non_blocking=True)
+        input = input.cuda(opt.gpu, non_blocking=True)
         input = input.float()
         target = target.float()
         target = target.view(-1, 6).contiguous().cuda(async=True)
         outGT = torch.cat((outGT, target), 0)
 
         # ===================forward=====================
-        feat = model(input, opt.layer)
+
+        feat = model(input)[0]
+        #feat = feat.detach()
+
         output = classifier(feat)
         outPRED = torch.cat((outPRED, output.data), 0)
         loss = criterion(output, target.float())
         losses.update(loss.item(), input.size(0))
+
         # ===================backward=====================
         optimizer.zero_grad()
         loss.backward()
@@ -361,7 +280,7 @@ def train(epoch, train_loader, model, classifier, criterion, optimizer, opt):
         end = time.time()
 
         # print info
-        if idx % opt.print_freq == 0:
+        if idx % args.print_freq == 0:
             print('Epoch: [{0}][{1}/{2}]\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
@@ -372,7 +291,7 @@ def train(epoch, train_loader, model, classifier, criterion, optimizer, opt):
             sys.stdout.flush()
     auc_train, mean_auc_train = computeAUC(outGT, outPRED, 6)
     print('All Train AUC is {},  Mean_AUC IS {}'.format(auc_train, mean_auc_train))
-    return mean_auc_train
+    return mean_auc_train, loss
 
 
 def validate_multilabel(val_loader, model, classifier, criterion, opt):
@@ -389,13 +308,12 @@ def validate_multilabel(val_loader, model, classifier, criterion, opt):
         end = time.time()
         for idx, (input, target) in enumerate(val_loader):
             input = input.float()
-            if opt.gpu is not None:
-                input = input.cuda(opt.gpu, non_blocking=True)
+            input = input.cuda(opt.gpu, non_blocking=True)
             input = input.float()
             target = target.view(-1, 6).contiguous().cuda(async=True).float()
             outGT = torch.cat((outGT, target), 0)
             # compute output
-            feat = model(input, opt.layer)
+            feat = model(input)[0]
             feat = feat.detach()
             output = classifier(feat)
             outPRED = torch.cat((outPRED, output.data), 0)
@@ -404,7 +322,7 @@ def validate_multilabel(val_loader, model, classifier, criterion, opt):
             batch_time.update(time.time() - end)
             end = time.time()
 
-            if idx % opt.print_freq == 0:
+            if idx % args.print_freq == 0:
                 print('Test: [{0}/{1}]\t'
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
@@ -419,4 +337,4 @@ def validate_multilabel(val_loader, model, classifier, criterion, opt):
 
 if __name__ == '__main__':
     best_acc1 = 0
-    main()
+    # main()
