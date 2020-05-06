@@ -1,0 +1,8 @@
+python MoCo_downstream.py is equivalent to the old MoCo_Efficient
+python MoCo_downstream.py --freeze is equivalent to the old MoCo_Linear
+python MoCo_downstream.py --resnet is equivalent to resnet
+
+python MoCov2_downstream.py is equivalent to the old MoCov2_Efficient
+python MoCov2_downstream.py --freeze is equivalent to the old MoCov2_Linear
+
+TO DO simCLR 
