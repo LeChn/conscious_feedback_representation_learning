@@ -177,7 +177,7 @@ def main():
 
     if args.aug == 'NULL':
         train_transform = transforms.Compose([
-            transforms.RandomResizedCrop(image_size, scale=(args.crop, 1.)),
+            transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             normalize,

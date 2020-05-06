@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import numpy as np
 from skimage import color
 from PIL import Image
@@ -10,40 +8,8 @@ import os
 import pandas as pd
 
 
-'''class ImageFolderInstance(datasets.ImageFolder):
-    """Folder datasets which ret                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            urns the index of the image as well
-    """
-
-    def __init__(self, root, transform=None, target_transform=None, two_crop=False):
-        super(ImageFolderInstance, self).__init__(root, transform, target_transform)
-        self.two_crop = two_crop
-
-    def __getitem__(self, index):
-        """
-        Args:
-            index (int): Index
-        Returns:
-            tuple: (image, target, index) where target is class_index of the target class.
-        """
-        path, target = self.imgs[index]
-        image = self.loader(path)
-        if self.transform is not None:
-            img = self.transform(image)
-        if self.target_transform is not None:
-            target = self.target_transform(target)
-
-        if self.two_crop:
-            img2 = self.transform(image)
-            img = torch.cat([img, img2], dim=0)
-
-        return img, target, index'''
-
-
 class RSNA_Data(Dataset):
-    def __init__(self,
-                 name_list,
-                 train_png_dir,
-                 transform):
+    def __init__(self, name_list, train_png_dir, transform):
         super(RSNA_Data, self).__init__()
         self.name_list = name_list
         self.transform = transform
@@ -53,9 +19,8 @@ class RSNA_Data(Dataset):
 
         filename = self.name_list[idx]
         filepath = os.path.join(self.train_png_dir, filename)
-        image = Image.open(filepath)
-        img = self.transform(image)
-
+        image = Image.open(filepath)  # PIL [0,255]
+        img = self.transform(image)  # pytorch tensor numpy [0,1]
 
         img2 = self.transform(image)
         img = torch.cat([img, img2], dim=0)
@@ -68,35 +33,29 @@ class RSNA_Data(Dataset):
     def __len__(self):
         return len(self.name_list)
 
+
 class RSNA_Data_finetune(Dataset):
-    def __init__(self,
-                 name_list,
-                 label_csv,
-                 train_png_dir,
-                 transform):
+    def __init__(self, name_list, label_csv, train_png_dir, transform):
         super(RSNA_Data_finetune, self).__init__()
         self.name_list = name_list
         self.transform = transform
         self.train_png_dir = train_png_dir
         self.label_csv = pd.read_csv(label_csv)
-        #print(self.label_csv.head())
+        # print(self.label_csv.head())
         self.label_csv.set_index(['Image'], inplace=True)
-        #print(self.label_csv.head())
+        # print(self.label_csv.head())
 
     def __getitem__(self, idx):
 
         filename = self.name_list[idx]
         filepath = os.path.join(self.train_png_dir, filename)
-        #print(filepath)
+        # print(filepath)
         image = Image.open(filepath)
         img = self.transform(image)
 
-
         #img2 = self.transform(image)
         #img = torch.cat([img, img2], dim=0)
-        labels = torch.tensor(
-            self.label_csv.loc[
-                filename[:-4], ['epidural', 'intraparenchymal', 'intraventricular', 'subarachnoid', 'subdural', 'any']])
+        labels = torch.tensor(self.label_csv.loc[filename[:-4], ['epidural', 'intraparenchymal', 'intraventricular', 'subarachnoid', 'subdural', 'any']])
 
         # print(label)
         # exit(0)
@@ -104,7 +63,6 @@ class RSNA_Data_finetune(Dataset):
 
     def __len__(self):
         return len(self.name_list)
-
 
 
 if __name__ == '__main__':
@@ -116,7 +74,7 @@ if __name__ == '__main__':
     normalize = transforms.Normalize(mean=mean, std=std)
     train_transform = transforms.Compose([
         transforms.RandomResizedCrop(64, scale=(0.2, 1.)),
-        #transforms.RandomGrayscale(p=0.2),
+        # transforms.RandomGrayscale(p=0.2),
         #transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),

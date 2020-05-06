@@ -4,6 +4,7 @@ from sklearn.metrics.ranking import roc_auc_score
 import os
 import sys
 import time
+import itertools
 import torch
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
@@ -21,6 +22,7 @@ from sklearn.metrics import log_loss
 from models.resnet import InsResNet50
 from models.LinearModel import LinearClassifierResNet
 import tensorboard_logger as tb_logger
+import pdb
 os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
 
 
@@ -36,113 +38,60 @@ def computeAUC(dataGT, dataPRED, classCount):
 
 def parse_option():
 
-    hostname = socket.gethostname()
+    # hostname = socket.gethostname()
 
     parser = argparse.ArgumentParser('argument for training')
 
-    parser.add_argument('--print_freq', type=int,
-                        default=100, help='print frequency')
-    parser.add_argument('--tb_freq', type=int,
-                        default=500, help='tb frequency')
-    parser.add_argument('--save_freq', type=int,
-                        default=5000, help='save frequency')
-    parser.add_argument('--batch_size', type=int,
-                        default=128, help='batch_size')
-    parser.add_argument('--num_workers', type=int,
-                        default=8, help='num of workers to use')
-    parser.add_argument('--epochs', type=int, default=100,
-                        help='number of training epochs')
+    parser.add_argument('--print_freq', type=int, default=100, help='print frequency')
+    parser.add_argument('--tb_freq', type=int, default=500, help='tb frequency')
+    parser.add_argument('--save_freq', type=int, default=5000, help='save frequency')
+    parser.add_argument('--batch_size', type=int, default=128, help='batch_size')
+    parser.add_argument('--num_workers', type=int, default=8, help='num of workers to use')
+    parser.add_argument('--epochs', type=int, default=200, help='number of training epochs')
 
     # optimization
-    parser.add_argument('--learning_rate', type=float,
-                        default=0.03, help='learning rate')
-    parser.add_argument('--lr_decay_epochs', type=str,
-                        default='100,120', help='where to decay lr, can be a list')
-    parser.add_argument('--lr_decay_rate', type=float,
-                        default=0.2, help='decay rate for learning rate')
+    parser.add_argument('--learning_rate', type=float, default=0.03, help='learning rate')
+    parser.add_argument('--lr_decay_epochs', type=str, default='100,120', help='where to decay lr, can be a list')
+    parser.add_argument('--lr_decay_rate', type=float, default=0.2, help='decay rate for learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
-    parser.add_argument('--weight_decay', type=float,
-                        default=0, help='weight decay')
-    parser.add_argument('--beta1', type=float,
-                        default=0.5, help='beta1 for Adam')
-    parser.add_argument('--beta2', type=float,
-                        default=0.999, help='beta2 for Adam')
+    parser.add_argument('--weight_decay', type=float, default=0, help='weight decay')
 
     # model definition
-    parser.add_argument('--model', type=str, default='resnet50',
-                        choices=['resnet50', 'resnet50x2', 'resnet50x4'])
-    parser.add_argument('--model_path', type=str,
-                        default='/home/charlietran/rsnaproject/MIRL-master/modelpath/ckpt_epoch_110.pth', help='the model to test')
-    parser.add_argument('--layer', type=int, default=6,
-                        help='which layer to evaluate')
+    parser.add_argument('--model', type=str, default='resnet50', choices=['resnet50', 'resnet50x2', 'resnet50x4'])
+    parser.add_argument('--model_path', type=str, default='/home/charlietran/rsnaproject/MIRL-master/modelpath/ckpt_epoch_110.pth', help='the model to test')
+    parser.add_argument('--layer', type=int, default=6, help='which layer to evaluate')
+    parser.add_argument('--resnet', action='store_true', help='ignore pre-trained encoder')
+    parser.add_argument('--freeze', action='store_true', help='freeze the encoder')
 
     # crop
     parser.add_argument('--crop', type=float, default=0.2, help='minimum crop')
 
     # dataset
-    parser.add_argument('--train_txt', type=str,
-                        default="../experiments_configure/train1F.txt")
-    parser.add_argument('--val_txt', type=str,
-                        default="../experiments_configure/valF.txt")
-    parser.add_argument('--dataset', type=str, default='imagenet100',
-                        choices=['imagenet100', 'imagenet'])
-    parser.add_argument('--data_folder', type=str,
-                        default='/DATA2/Data/RSNA')
-    parser.add_argument('--save_path', type=str,
-                        default='/home/jason/github/MIRL/RSNA_MoCo/finetunemodel')
-    parser.add_argument('--tb_path', type=str,
-                        default='/home/jason/github/MIRL/RSNA_MoCo/ts_bd')
+    parser.add_argument('--train_txt', type=str, default="../experiments_configure/train1F.txt")
+    parser.add_argument('--val_txt', type=str, default="../experiments_configure/valF.txt")
+    parser.add_argument('--dataset', type=str, default='imagenet100', choices=['imagenet100', 'imagenet'])
+    parser.add_argument('--data_folder', type=str, default='/DATA2/Data/RSNA')
+    parser.add_argument('--save_path', type=str, default='/home/jason/github/MIRL/RSNA_MoCo/finetunemodel')
+    parser.add_argument('--tb_path', type=str, default='/home/jason/github/MIRL/RSNA_MoCo/ts_bd')
     # augmentation
-    parser.add_argument('--aug', type=str, default='CJ',
-                        choices=['NULL', 'CJ'])
+    parser.add_argument('--aug', type=str, default='CJ', choices=['NULL', 'CJ'])
     # add BN
-    parser.add_argument('--bn', action='store_true',
-                        help='use parameter-free BN')
-    parser.add_argument('--cosine', action='store_true',
-                        help='use cosine annealing')
-    parser.add_argument('--adam', action='store_true',
-                        help='use adam optimizer')
+    parser.add_argument('--bn', action='store_true', help='use parameter-free BN')
+    parser.add_argument('--cosine', action='store_true', help='use cosine annealing')
+    parser.add_argument('--adam', action='store_true', help='use adam optimizer')
     # warmup
-    parser.add_argument('--warm', action='store_true',
-                        help='add warm-up setting')
-    parser.add_argument('--amp', action='store_true',
-                        help='using mixed precision')
-    parser.add_argument('--opt_level', type=str,
-                        default='O2', choices=['O1', 'O2'])
-    parser.add_argument('--syncBN', action='store_true',
-                        help='enable synchronized BN')
+    parser.add_argument('--warm', action='store_true', help='add warm-up setting')
+    parser.add_argument('--amp', action='store_true', help='using mixed precision')
+    parser.add_argument('--opt_level', type=str, default='O2', choices=['O1', 'O2'])
+    parser.add_argument('--syncBN', action='store_true', help='enable synchronized BN')
     # GPU setting
     parser.add_argument('--gpu', default='0', type=int, help='GPU id to use.')
 
     opt = parser.parse_args()
+    opt.lr_decay_epochs = [int(learn_rate) for learn_rate in opt.lr_decay_epochs.split(',')]
+    opt.model_name = f'{"ResNet" if opt.resnet else "MoCo_Freeze" if opt.freeze else "MoCo"}_{opt.batch_size}_bsz_{opt.learning_rate}_lr_{opt.weight_decay}_decay_{opt.crop}_crop'
 
-    if opt.dataset == 'imagenet':
-        if 'alexnet' not in opt.model:
-            opt.crop = 0.08
-
-    iterations = opt.lr_decay_epochs.split(',')
-    opt.lr_decay_epochs = list([])
-    for it in iterations:
-        opt.lr_decay_epochs.append(int(it))
-
-    opt.model_name = opt.model_path.split('/')[-2]
-    opt.model_name = '{}_bsz_{}_lr_{}_decay_{}_crop_{}'.format(opt.model_name, opt.batch_size, opt.learning_rate,
-                                                               opt.weight_decay, opt.crop)
-
-    if opt.amp:
-        opt.model_name = '{}_amp_{}'.format(opt.model_name, opt.opt_level)
-
-    opt.model_name = '{}_aug_{}'.format(opt.model_name, opt.aug)
-
-    if opt.bn:
-        opt.model_name = '{}_useBN'.format(opt.model_name)
-    if opt.adam:
-        opt.model_name = '{}_useAdam'.format(opt.model_name)
-    if opt.cosine:
-        opt.model_name = '{}_cosine'.format(opt.model_name)
-
-    opt.tb_folder = os.path.join(
-        opt.tb_path, opt.model_name + '_layer{}'.format(opt.layer))
+    opt.tb_folder = os.path.join(opt.tb_path, opt.model_name + '_layer{}'.format(opt.layer))
     if not os.path.isdir(opt.tb_folder):
         os.makedirs(opt.tb_folder)
 
@@ -156,11 +105,8 @@ def parse_option():
 
 def main():
     args = parse_option()
-    #train_txt = "/media/ubuntu/data/train5F.txt"
     train_txt = args.train_txt
     val_txt = args.val_txt
-    global best_acc1
-    best_acc1 = 0
     lowest_loss = 100
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
@@ -237,12 +183,13 @@ def main():
     else:
         raise NotImplementedError('model not supported {}'.format(args.model))
 
-    print('==> loading pre-trained model')
-    ckpt = torch.load(args.model_path)
-    model.load_state_dict(ckpt['model'])
-    print("==> loaded checkpoint '{}' (epoch {})".format(
-        args.model_path, ckpt['epoch']))
-    print('==> done')
+    if not args.resnet:
+        print('==> loading pre-trained model')
+        ckpt = torch.load(args.model_path)
+        model.load_state_dict(ckpt['model'])
+        print("==> loaded checkpoint '{}' (epoch {})".format(
+            args.model_path, ckpt['epoch']))
+        print('==> done')
 
     model = model.cuda()
     classifier = classifier.cuda()
@@ -250,50 +197,26 @@ def main():
     #criterion = torch.nn.CrossEntropyLoss().cuda(args.gpu)
     criterion = torch.nn.BCEWithLogitsLoss().cuda(args.gpu)
 
-    if not args.adam:
-        optimizer = torch.optim.SGD(classifier.parameters(),
-                                    lr=args.learning_rate,
-                                    momentum=args.momentum,
-                                    weight_decay=args.weight_decay)
+    if args.freeze:
+        optimizer = torch.optim.SGD(classifier.parameters(), lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
     else:
-        optimizer = torch.optim.Adam(classifier.parameters(),
-                                     lr=args.learning_rate,
-                                     betas=(args.beta1, args.beta2),
-                                     weight_decay=args.weight_decay,
-                                     eps=1e-8)
+        optimizer = torch.optim.SGD(itertools.chain(model.parameters(), classifier.parameters()), lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
 
     model.eval()
     cudnn.benchmark = True
     args.start_epoch = 1
 
-    # set cosine annealing scheduler
-    if args.cosine:
-        # last_epoch = args.start_epoch - 2
-        # eta_min = args.learning_rate * (args.lr_decay_rate ** 3) * 0.1
-        # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs, eta_min, last_epoch)
-        eta_min = args.learning_rate * (args.lr_decay_rate ** 3) * 0.1
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, args.epochs, eta_min, -1)
-        # dummy loop to catch up with current epoch
-        for i in range(1, args.start_epoch):
-            scheduler.step()
-
     logger = tb_logger.Logger(logdir=args.tb_folder, flush_secs=2)
     for epoch in range(args.start_epoch, args.epochs + 1):
-        if args.cosine:
-            scheduler.step()
-        else:
-            adjust_learning_rate(epoch, args, optimizer)
+        adjust_learning_rate(epoch, args, optimizer)
         print("==> training...")
 
         time1 = time.time()
-        train_auc = train(epoch, train_loader, model,
-                          classifier, criterion, optimizer, args)
+        train_auc = train(epoch, train_loader, model, classifier, criterion, optimizer, args)
         time2 = time.time()
         print('train epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
         print("==> testing...")
-        auc, mean_auc, test_loss = validate_multilabel(
-            val_loader, model, classifier, criterion, args)
+        auc, mean_auc, test_loss = validate_multilabel(val_loader, model, classifier, criterion, args)
         if mean_auc > best_test_auc:
             best_test_auc = mean_auc
         # save the best model
@@ -301,9 +224,6 @@ def main():
             lowest_loss = test_loss
             print('saving best model!')
             torch.save(classifier.state_dict(), "best_classifier.pth")'''
-        if epoch % args.save_freq == 0 and epoch > args.save_freq:
-            torch.save(classifier.state_dict(), "epoch" +
-                       str(epoch) + "_classifier.pth")
         logger.log_value('mean_auc', mean_auc, epoch)
         logger.log_value('test_loss', test_loss, epoch)
         logger.log_value('best_auc', best_test_auc, epoch)
@@ -324,15 +244,16 @@ def train(epoch, train_loader, model, classifier, criterion, optimizer, opt):
     one epoch training
     """
 
-    model.eval()
+    if opt.freeze:
+        model.eval()
+    else:
+        model.train()
     classifier.train()
     outGT = torch.FloatTensor().cuda()
     outPRED = torch.FloatTensor().cuda()
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
-    top1 = AverageMeter()
-    #top5 = AverageMeter()
 
     end = time.time()
     for idx, (input, target) in enumerate(train_loader):
@@ -347,15 +268,17 @@ def train(epoch, train_loader, model, classifier, criterion, optimizer, opt):
         outGT = torch.cat((outGT, target), 0)
 
         # ===================forward=====================
-        with torch.no_grad():
+        if opt.freeze:
+            with torch.no_grad():
+                feat = model(input, opt.layer)
+                feat = feat.detach()
+        else:
             feat = model(input, opt.layer)
-            feat = feat.detach()
 
         output = classifier(feat)
         outPRED = torch.cat((outPRED, output.data), 0)
         loss = criterion(output, target.float())
         losses.update(loss.item(), input.size(0))
-
         # ===================backward=====================
         optimizer.zero_grad()
         loss.backward()
@@ -383,7 +306,6 @@ def train(epoch, train_loader, model, classifier, criterion, optimizer, opt):
 def validate_multilabel(val_loader, model, classifier, criterion, opt):
     batch_time = AverageMeter()
     losses = AverageMeter()
-    # top5 = AverageMeter()
 
     # switch to evaluate mode
     model.eval()
@@ -412,8 +334,7 @@ def validate_multilabel(val_loader, model, classifier, criterion, opt):
             if idx % opt.print_freq == 0:
                 print('Test: [{0}/{1}]\t'
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                      'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
-                          idx, len(val_loader), batch_time=batch_time, loss=losses))
+                      'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(idx, len(val_loader), batch_time=batch_time, loss=losses))
                 #print('Test Logloss is {},mean_Logloss is {:.3f}'.format(Logloss, mean_ll))
     auc_test, mean_auc_test = computeAUC(outGT, outPRED, 6)
     '''auc = [round(x, 4) for x in auc]
@@ -423,5 +344,4 @@ def validate_multilabel(val_loader, model, classifier, criterion, opt):
 
 
 if __name__ == '__main__':
-    best_acc1 = 0
     main()

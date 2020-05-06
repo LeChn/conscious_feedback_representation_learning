@@ -23,14 +23,6 @@ from NCE.NCECriterion import NCECriterion
 from NCE.NCECriterion import NCESoftmaxLoss
 os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 
-try:
-    from apex import amp, optimizers
-except ImportError:
-    pass
-"""
-TODO: python 3.6 ModuleNotFoundError
-"""
-
 
 def parse_option():
 
@@ -38,98 +30,67 @@ def parse_option():
 
     parser = argparse.ArgumentParser('argument for training')
 
-    parser.add_argument('--print_freq', type=int,
-                        default=100, help='print frequency')
-    parser.add_argument('--tb_freq', type=int,
-                        default=500, help='tb frequency')
-    parser.add_argument('--save_freq', type=int,
-                        default=10, help='save frequency')
-    parser.add_argument('--batch_size', type=int,
-                        default=128, help='batch_size')
-    parser.add_argument('--num_workers', type=int,
-                        default=18, help='num of workers to use')
-    parser.add_argument('--epochs', type=int, default=200,
-                        help='number of training epochs')
+    parser.add_argument('--print_freq', type=int, default=100, help='print frequency')
+    parser.add_argument('--tb_freq', type=int, default=500, help='tb frequency')
+    parser.add_argument('--save_freq', type=int, default=10, help='save frequency')
+    parser.add_argument('--batch_size', type=int, default=128, help='batch_size')
+    parser.add_argument('--num_workers', type=int, default=18, help='num of workers to use')
+    parser.add_argument('--epochs', type=int, default=200, help='number of training epochs')
 
     # optimization
-    parser.add_argument('--learning_rate', type=float,
-                        default=1, help='learning rate')
-    parser.add_argument('--lr_decay_epochs', type=str,
-                        default='100,120,200', help='where to decay lr, can be a list')
-    parser.add_argument('--lr_decay_rate', type=float,
-                        default=0.25, help='decay rate for learning rate')
-    parser.add_argument('--beta1', type=float,
-                        default=0.5, help='beta1 for adam')
-    parser.add_argument('--beta2', type=float,
-                        default=0.999, help='beta2 for Adam')
-    parser.add_argument('--weight_decay', type=float,
-                        default=1e-4, help='weight decay')
+    parser.add_argument('--learning_rate', type=float, default=1, help='learning rate')
+    parser.add_argument('--lr_decay_epochs', type=str, default='100,120,200', help='where to decay lr, can be a list')
+    parser.add_argument('--lr_decay_rate', type=float, default=0.25, help='decay rate for learning rate')
+    parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam')
+    parser.add_argument('--beta2', type=float, default=0.999, help='beta2 for Adam')
+    parser.add_argument('--weight_decay', type=float, default=1e-4, help='weight decay')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
 
     # crop
     parser.add_argument('--crop', type=float, default=0.4, help='minimum crop')
 
     # dataset
-    parser.add_argument('--dataset', type=str, default='imagenet100',
-                        choices=['imagenet100', 'imagenet'])
-    parser.add_argument('--data_folder', type=str,
-                        default="/DATA2/Data/RSNA/RSNAFTR")
-    # /home/charlietran/RepresentationLearning/kaggle/c/13451/rsna-intracranial-hemorrhage-detection
+    parser.add_argument('--dataset', type=str, default='imagenet100', choices=['imagenet100', 'imagenet'])
+    parser.add_argument('--data_folder', type=str, default="/DATA2/Data/RSNA/RSNAFTR")
+
     # resume
-    parser.add_argument('--resume', default=False, type=str,
-                        help='path to latest checkpoint (default: none)')
+    parser.add_argument('--resume', default=False, type=str, help='path to latest checkpoint (default: none)')
 
     # augmentation setting
-    parser.add_argument('--aug', type=str, default='NULL',
-                        choices=['NULL', 'CJ'])
+    parser.add_argument('--aug', type=str, default='NULL', choices=['NULL', 'CJ'])
 
     # warm up
     parser.add_argument('--warm',  default=False, help='add warm-up setting')
     parser.add_argument('--amp',  default=False, help='using mixed precision')
-    parser.add_argument('--opt_level', type=str,
-                        default='O2', choices=['O1', 'O2'])
+    parser.add_argument('--opt_level', type=str, default='O2', choices=['O1', 'O2'])
 
     # model definition
-    parser.add_argument('--model', type=str, default='resnet50',
-                        choices=['resnet50', 'resnet50x2', 'resnet50x4'])
-    parser.add_argument('--model_path', type=str,
-                        default='/home/jason/github/MIRL/RSNA_MoCo/MoCoSuper/')
-    parser.add_argument('--tb_path', type=str,
-                        default='/home/jason/github/MIRL/RSNA_MoCo/ts_bd')
+    parser.add_argument('--model', type=str, default='resnet50', choices=['resnet50', 'resnet50x2', 'resnet50x4'])
+    parser.add_argument('--model_path', type=str, default='/home/jason/github/MIRL/RSNA_MoCo/MoCoSuper/')
+    parser.add_argument('--tb_path', type=str, default='/home/jason/github/MIRL/RSNA_MoCo/ts_bd')
     # loss function
-    parser.add_argument('--softmax', default=True,
-                        help='using softmax contrastive loss rather than NCE')
+    parser.add_argument('--softmax', default=True, help='using softmax contrastive loss rather than NCE')
     parser.add_argument('--nce_k', type=int, default=16384)
     parser.add_argument('--nce_t', type=float, default=0.07)
     parser.add_argument('--nce_m', type=float, default=0.5)
 
     # memory setting
-    parser.add_argument('--moco', default=True,
-                        help='using MoCo (otherwise Instance Discrimination)')
-    parser.add_argument('--alpha', type=float, default=0.999,
-                        help='exponential moving average weight')
+    parser.add_argument('--moco', default=True, help='using MoCo (otherwise Instance Discrimination)')
+    parser.add_argument('--alpha', type=float, default=0.999, help='exponential moving average weight')
 
     # GPU setting
     parser.add_argument('--gpu', default=0, type=int, help='GPU id to use.')
 
     opt = parser.parse_args()
 
-    iterations = opt.lr_decay_epochs.split(',')
-    opt.lr_decay_epochs = list([])
-    for it in iterations:
-        opt.lr_decay_epochs.append(int(it))
+    opt.lr_decay_epochs = [int(learn_rate) for learn_rate in opt.lr_decay_epochs.split(',')]
 
     opt.method = 'softmax' if opt.softmax else 'nce'
-    prefix = 'MoCoSuper{}'.format(opt.alpha) if opt.moco else 'InsDis'
+    prefix = f'MoCoSuper_{opt.alpha}'
 
     opt.model_name = '{}_{}_{}_{}_lr_{}_decay_{}_bsz_{}_crop_{}'.format(prefix, opt.method, opt.nce_k, opt.model,
                                                                         opt.learning_rate, opt.weight_decay,
                                                                         opt.batch_size, opt.crop)
-
-    if opt.warm:
-        opt.model_name = '{}_warm'.format(opt.model_name)
-    if opt.amp:
-        opt.model_name = '{}_amp_{}'.format(opt.model_name, opt.opt_level)
 
     opt.model_name = '{}_aug_{}'.format(opt.model_name, opt.aug)
 

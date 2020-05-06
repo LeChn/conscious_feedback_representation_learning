@@ -1,4 +1,3 @@
-from __future__ import print_function
 import os
 import sys
 import time
@@ -281,7 +280,7 @@ def main():
         # tensorboard logger
         logger.log_value('ins_loss', loss, epoch)
         logger.log_value('ins_prob', prob, epoch)
-        logger.log_value('ins_raw_loss', raw_loss,epoch)
+        logger.log_value('ins_raw_loss', raw_loss, epoch)
         logger.log_value(
             'learning_rate', optimizer.param_groups[0]['lr'], epoch)
 
@@ -358,14 +357,15 @@ def train_simCLR(epoch, train_loader, model, contrast, criterion, optimizer, opt
         #index = index.cuda(opt.gpu, non_blocking=True)
         # ===================forward=====================
         x1, x2 = torch.split(inputs, [1, 1], dim=1)
-        
+
         feature_1, out_1 = model(x1)
         feature_2, out_2 = model(x2)
         # [2*B, D]
         out = torch.cat([out_1, out_2], dim=0)
         # [2*B, 2*B]
         sim_matrix = torch.exp(torch.mm(out, out.t().contiguous()) / 0.5)
-        mask = (torch.ones_like(sim_matrix) - torch.eye(2 * bsz, device=sim_matrix.device)).bool()
+        mask = (torch.ones_like(sim_matrix) -
+                torch.eye(2 * bsz, device=sim_matrix.device)).bool()
         # [2*B, 2*B-1]
         sim_matrix = sim_matrix.masked_select(mask).view(2 * bsz, -1)
 
