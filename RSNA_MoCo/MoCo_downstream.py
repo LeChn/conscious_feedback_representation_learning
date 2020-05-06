@@ -55,6 +55,8 @@ def parse_option():
     parser.add_argument('--lr_decay_rate', type=float, default=0.2, help='decay rate for learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
     parser.add_argument('--weight_decay', type=float, default=0, help='weight decay')
+    parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for Adam')
+    parser.add_argument('--beta2', type=float, default=0.999, help='beta2 for Adam')
 
     # model definition
     parser.add_argument('--model', type=str, default='resnet50', choices=['resnet50', 'resnet50x2', 'resnet50x4'])
@@ -245,6 +247,13 @@ def train(epoch, train_loader, model, classifier, criterion, optimizer, opt):
     """
 
     if opt.freeze:
+        """
+        Switch to eval mode:
+        Under the protocol of linear classification on frozen features/models,
+        it is not legitimate to change any part of the pre-trained model.
+        BatchNorm in train mode may revise running mean/std (even if it receives
+        no gradient), which are part of the model parameters too.
+        """
         model.eval()
     else:
         model.train()

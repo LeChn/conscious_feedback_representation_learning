@@ -15,6 +15,7 @@ def adjust_learning_rate(epoch, opt, optimizer):
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.val = 0
         self.avg = 0

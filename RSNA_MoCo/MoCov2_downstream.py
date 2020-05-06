@@ -1,8 +1,10 @@
 from __future__ import print_function
+import numpy as np
 from sklearn.metrics.ranking import roc_auc_score
 import os
 import sys
 import time
+import itertools
 import torch
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
@@ -19,8 +21,10 @@ from util import adjust_learning_rate, AverageMeter
 from sklearn.metrics import log_loss
 from models.simCLR import simCLR
 from models.LinearModel import LinearClassifierResNet
+import tensorboard_logger as tb_logger
+import pdb
 os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
-import numpy as np
+
 
 def computeAUC(dataGT, dataPRED, classCount):
     outAUROC = []
@@ -31,9 +35,10 @@ def computeAUC(dataGT, dataPRED, classCount):
     mean_auc = float(np.mean(np.array(outAUROC)))
     return outAUROC, round(mean_auc, 4)
 
+
 def parse_option():
 
-    hostname = socket.gethostname()
+    # hostname = socket.gethostname()
 
     parser = argparse.ArgumentParser('argument for training')
 
@@ -45,8 +50,8 @@ def parse_option():
     parser.add_argument('--epochs', type=int, default=200, help='number of training epochs')
 
     # optimization
-    parser.add_argument('--learning_rate', type=float, default=1, help='learning rate')
-    parser.add_argument('--lr_decay_epochs', type=str, default='10,15,20', help='where to decay lr, can be a list')
+    parser.add_argument('--learning_rate', type=float, default=0.03, help='learning rate')
+    parser.add_argument('--lr_decay_epochs', type=str, default='100,120', help='where to decay lr, can be a list')
     parser.add_argument('--lr_decay_rate', type=float, default=0.2, help='decay rate for learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
     parser.add_argument('--weight_decay', type=float, default=0, help='weight decay')
@@ -57,17 +62,19 @@ def parse_option():
     parser.add_argument('--model', type=str, default='resnet50', choices=['resnet50', 'resnet50x2', 'resnet50x4'])
     parser.add_argument('--model_path', type=str, default='/home/jason/github/MIRL/RSNA_MoCo/MoCoV2/ckpt_epoch_200.pth', help='the model to test')
     parser.add_argument('--layer', type=int, default=6, help='which layer to evaluate')
+    parser.add_argument('--resnet', action='store_true', help='ignore pre-trained encoder')
+    parser.add_argument('--freeze', action='store_true', help='freeze the encoder')
 
     # crop
     parser.add_argument('--crop', type=float, default=0.2, help='minimum crop')
 
     # dataset
-    parser.add_argument('--train_txt', type=str, default="../experiments_configure/train5F.txt")
+    parser.add_argument('--train_txt', type=str, default="../experiments_configure/train1F.txt")
     parser.add_argument('--val_txt', type=str, default="../experiments_configure/valF.txt")
     parser.add_argument('--dataset', type=str, default='imagenet100', choices=['imagenet100', 'imagenet'])
     parser.add_argument('--data_folder', type=str, default='/DATA2/Data/RSNA')
-    parser.add_argument('--save_path', type=str, default='.')
-    parser.add_argument('--tb_path', type=str, default='.')
+    parser.add_argument('--save_path', type=str, default='/home/jason/github/MIRL/RSNA_MoCo/finetunemodel')
+    parser.add_argument('--tb_path', type=str, default='/home/jason/github/MIRL/RSNA_MoCo/ts_bd')
     # augmentation
     parser.add_argument('--aug', type=str, default='CJ', choices=['NULL', 'CJ'])
     # add BN
@@ -83,32 +90,8 @@ def parse_option():
     parser.add_argument('--gpu', default='0', type=int, help='GPU id to use.')
 
     opt = parser.parse_args()
-
-
-    if opt.dataset == 'imagenet':
-        if 'alexnet' not in opt.model:
-            opt.crop = 0.08
-
-    iterations = opt.lr_decay_epochs.split(',')
-    opt.lr_decay_epochs = list([])
-    for it in iterations:
-        opt.lr_decay_epochs.append(int(it))
-
-    opt.model_name = opt.model_path.split('/')[-2]
-    opt.model_name = '{}_bsz_{}_lr_{}_decay_{}_crop_{}'.format(opt.model_name, opt.batch_size, opt.learning_rate,
-                                                               opt.weight_decay, opt.crop)
-
-    if opt.amp:
-        opt.model_name = '{}_amp_{}'.format(opt.model_name, opt.opt_level)
-
-    opt.model_name = '{}_aug_{}'.format(opt.model_name, opt.aug)
-
-    if opt.bn:
-        opt.model_name = '{}_useBN'.format(opt.model_name)
-    if opt.adam:
-        opt.model_name = '{}_useAdam'.format(opt.model_name)
-    if opt.cosine:
-        opt.model_name = '{}_cosine'.format(opt.model_name)
+    opt.lr_decay_epochs = [int(learn_rate) for learn_rate in opt.lr_decay_epochs.split(',')]
+    opt.model_name = f'{"ResNet" if opt.resnet else "MoCoV2_Freeze" if opt.freeze else "MoCoV2"}_{opt.batch_size}_bsz_{opt.learning_rate}_lr_{opt.weight_decay}_decay_{opt.crop}_crop'
 
     opt.tb_folder = os.path.join(opt.tb_path, opt.model_name + '_layer{}'.format(opt.layer))
     if not os.path.isdir(opt.tb_folder):
@@ -124,11 +107,8 @@ def parse_option():
 
 def main():
     args = parse_option()
-    #train_txt = "/media/ubuntu/data/train5F.txt"
     train_txt = args.train_txt
     val_txt = args.val_txt
-    global best_acc1
-    best_acc1 = 0
     lowest_loss = 100
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
@@ -171,19 +151,22 @@ def main():
     f_train.close()
     trainfiles = [s.replace('\n', '') for s in c_train]
     csv_label = "train.csv"
-    train_dataset = RSNA_Data_finetune(trainfiles, csv_label, train_folder, train_transform)
+    train_dataset = RSNA_Data_finetune(
+        trainfiles, csv_label, train_folder, train_transform)
     #val_txt = "/media/ubuntu/data/valF.txt"
     f_val = open(val_txt)
     c_val = f_val.readlines()
     f_val.close()
     valfiles = [s.replace('\n', '') for s in c_val]
-    val_dataset = RSNA_Data_finetune(valfiles, csv_label, val_folder, val_transform)
+    val_dataset = RSNA_Data_finetune(
+        valfiles, csv_label, val_folder, val_transform)
 
-    print("Labled data for training",len(train_dataset))
+    print("Labled data for training", len(train_dataset))
     train_sampler = None
 
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
+        train_dataset, batch_size=args.batch_size, shuffle=(
+            train_sampler is None),
         num_workers=args.num_workers, pin_memory=True, sampler=train_sampler)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=args.batch_size, shuffle=False,
@@ -202,11 +185,13 @@ def main():
     else:
         raise NotImplementedError('model not supported {}'.format(args.model))
 
-    print('==> loading pre-trained model')
-    ckpt = torch.load(args.model_path)
-    model.load_state_dict(ckpt['model'])
-    print("==> loaded checkpoint '{}' (epoch {})".format(args.model_path, ckpt['epoch']))
-    print('==> done')
+    if not args.resnet:
+        print('==> loading pre-trained model')
+        ckpt = torch.load(args.model_path)
+        model.load_state_dict(ckpt['model'])
+        print("==> loaded checkpoint '{}' (epoch {})".format(
+            args.model_path, ckpt['epoch']))
+        print('==> done')
 
     model = model.cuda()
     classifier = classifier.cuda()
@@ -214,37 +199,18 @@ def main():
     #criterion = torch.nn.CrossEntropyLoss().cuda(args.gpu)
     criterion = torch.nn.BCEWithLogitsLoss().cuda(args.gpu)
 
-    if not args.adam:
-        optimizer = torch.optim.SGD(classifier.parameters(),
-                                    lr=args.learning_rate,
-                                    momentum=args.momentum,
-                                    weight_decay=args.weight_decay)
+    if args.freeze:
+        optimizer = torch.optim.SGD(classifier.parameters(), lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
     else:
-        optimizer = torch.optim.Adam(classifier.parameters(),
-                                     lr=args.learning_rate,
-                                     betas=(args.beta1, args.beta2),
-                                     weight_decay=args.weight_decay,
-                                     eps=1e-8)
+        optimizer = torch.optim.SGD(itertools.chain(model.parameters(), classifier.parameters()), lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
 
     model.eval()
     cudnn.benchmark = True
     args.start_epoch = 1
 
-    # set cosine annealing scheduler
-    if args.cosine:
-        # last_epoch = args.start_epoch - 2
-        # eta_min = args.learning_rate * (args.lr_decay_rate ** 3) * 0.1
-        # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs, eta_min, last_epoch)
-        eta_min = args.learning_rate * (args.lr_decay_rate ** 3) * 0.1
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs, eta_min, -1)
-        # dummy loop to catch up with current epoch
-        for i in range(1, args.start_epoch):
-            scheduler.step()
+    logger = tb_logger.Logger(logdir=args.tb_folder, flush_secs=2)
     for epoch in range(args.start_epoch, args.epochs + 1):
-        if args.cosine:
-            scheduler.step()
-        else:
-            adjust_learning_rate(epoch, args, optimizer)
+        adjust_learning_rate(epoch, args, optimizer)
         print("==> training...")
 
         time1 = time.time()
@@ -260,6 +226,9 @@ def main():
             lowest_loss = test_loss
             print('saving best model!')
             torch.save(classifier.state_dict(), "best_classifier.pth")'''
+        logger.log_value('mean_auc', mean_auc, epoch)
+        logger.log_value('test_loss', test_loss, epoch)
+        logger.log_value('best_auc', best_test_auc, epoch)
         print('best test auc is:', best_test_auc)
         pass
 
@@ -276,16 +245,24 @@ def train(epoch, train_loader, model, classifier, criterion, optimizer, opt):
     """
     one epoch training
     """
-    
-    model.eval()
+
+    if opt.freeze:
+        """
+        Switch to eval mode:
+        Under the protocol of linear classification on frozen features/models,
+        it is not legitimate to change any part of the pre-trained model.
+        BatchNorm in train mode may revise running mean/std (even if it receives
+        no gradient), which are part of the model parameters too.
+        """
+        model.eval()
+    else:
+        model.train()
     classifier.train()
     outGT = torch.FloatTensor().cuda()
     outPRED = torch.FloatTensor().cuda()
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
-    top1 = AverageMeter()
-    #top5 = AverageMeter()
 
     end = time.time()
     for idx, (input, target) in enumerate(train_loader):
@@ -300,7 +277,13 @@ def train(epoch, train_loader, model, classifier, criterion, optimizer, opt):
         outGT = torch.cat((outGT, target), 0)
 
         # ===================forward=====================
-        feat = model(input)[0]
+        if opt.freeze:
+            with torch.no_grad():
+                feat = model(input)[0]
+                feat = feat.detach()
+        else:
+            feat = model(input)[0]
+
         output = classifier(feat)
         outPRED = torch.cat((outPRED, output.data), 0)
         loss = criterion(output, target.float())
@@ -320,8 +303,8 @@ def train(epoch, train_loader, model, classifier, criterion, optimizer, opt):
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
-                epoch, idx, len(train_loader), batch_time=batch_time,
-                data_time=data_time, loss=losses))
+                      epoch, idx, len(train_loader), batch_time=batch_time,
+                      data_time=data_time, loss=losses))
             #print('TRAIN Logloss is {}, mean_Logloss is {}'.format(Logloss, mean_ll))
             sys.stdout.flush()
     auc_train, mean_auc_train = computeAUC(outGT, outPRED, 6)
@@ -332,9 +315,8 @@ def train(epoch, train_loader, model, classifier, criterion, optimizer, opt):
 def validate_multilabel(val_loader, model, classifier, criterion, opt):
     batch_time = AverageMeter()
     losses = AverageMeter()
-    # top5 = AverageMeter()
 
-    # switch to evaluate mode
+    # switch to evaluate mode, linear classification on frozen features/models,
     model.eval()
     classifier.eval()
     outGT = torch.FloatTensor().cuda()
@@ -361,8 +343,7 @@ def validate_multilabel(val_loader, model, classifier, criterion, opt):
             if idx % opt.print_freq == 0:
                 print('Test: [{0}/{1}]\t'
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                      'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
-                    idx, len(val_loader), batch_time=batch_time, loss=losses))
+                      'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(idx, len(val_loader), batch_time=batch_time, loss=losses))
                 #print('Test Logloss is {},mean_Logloss is {:.3f}'.format(Logloss, mean_ll))
     auc_test, mean_auc_test = computeAUC(outGT, outPRED, 6)
     '''auc = [round(x, 4) for x in auc]
@@ -371,7 +352,5 @@ def validate_multilabel(val_loader, model, classifier, criterion, opt):
     return auc_test, mean_auc_test, losses.avg
 
 
-
 if __name__ == '__main__':
-    best_acc1 = 0
     main()
