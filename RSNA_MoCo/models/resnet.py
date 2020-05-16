@@ -174,16 +174,16 @@ class ResNet(nn.Module):
             return x
         x = self.layer4(x)
         if layer == 5:
-            return x
+            return x  # f(x) in infoMax
         self.avgpool = nn.AvgPool2d(x.size(2), stride=1)
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
-        if layer == 6:
-            return x
+        if layer == 6:  # 2048-vector
+            return x  # h from simCLR  ,
         x = self.fc(x)
         x = self.l2norm(x)
 
-        return x
+        return x  # z from simCLR    ,  y in infoMax (yes), 128-vector
 
 
 def resnet18(pretrained=False, **kwargs):

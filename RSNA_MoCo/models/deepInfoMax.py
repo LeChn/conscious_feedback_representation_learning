@@ -10,7 +10,7 @@ class GlobalDiscriminator(nn.Module):
         super().__init__()
         self.c0 = nn.Conv2d(2048, 64, kernel_size=3)
         self.c1 = nn.Conv2d(64, 32, kernel_size=3)
-        self.l0 = nn.Linear(32 * 22 * 22 + 64, 512)
+        self.l0 = nn.Linear(416, 512)
         self.l1 = nn.Linear(512, 512)
         self.l2 = nn.Linear(512, 1)
 
@@ -19,7 +19,6 @@ class GlobalDiscriminator(nn.Module):
         h = self.c1(h)
         h = h.view(y.shape[0], -1)
         h = torch.cat((y, h), dim=1)
-        self.l0 = nn.Linear(h.size(1), 512)
         h = F.relu(self.l0(h))
         h = F.relu(self.l1(h))
         return self.l2(h)
@@ -54,9 +53,9 @@ class PriorDiscriminator(nn.Module):
 class DeepInfoMaxLoss(nn.Module):
     def __init__(self, alpha=0.5, beta=1.0, gamma=0.1):
         super().__init__()
-        self.global_d = GlobalDiscriminator()
-        self.local_d = LocalDiscriminator()
-        self.prior_d = PriorDiscriminator()
+        self.global_d = nn.DataParallel(GlobalDiscriminator())
+        self.local_d = nn.DataParallel(LocalDiscriminator())
+        self.prior_d = nn.DataParallel(PriorDiscriminator())
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma

@@ -5,9 +5,9 @@ import sys
 import time
 import itertools
 import torch
+import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
-import torch.nn.functional as F
 import argparse
 from random import shuffle
 import socket
@@ -23,7 +23,7 @@ from models.LinearModel import LinearClassifierResNet
 from models.deepInfoMax import GlobalDiscriminator, LocalDiscriminator, PriorDiscriminator, DeepInfoMaxLoss
 import tensorboard_logger as tb_logger
 import pdb
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
 
 
 def computeAUC(dataGT, dataPRED, classCount):
@@ -279,15 +279,15 @@ def train(epoch, train_loader, model, classifier, criterion, loss_fn, optimizer,
         # ===================forward=====================
         if opt.freeze:
             with torch.no_grad():
-                feat, _, M = model(input)
+                feat, y, M = model(input)
                 feat = feat.detach()
         else:
-            feat, _, M = model(input)
+            feat, y, M = model(input)
 
         M_prime = torch.cat((M[1:], M[0:1]), dim=0)
         output = classifier(feat)
         outPRED = torch.cat((outPRED, output.data), 0)
-        loss = criterion(output, target.float()) + loss_fn(output, M, M_prime)
+        loss = criterion(output, target.float()) + loss_fn(y, M, M_prime)
         losses.update(loss.item(), input.size(0))
         # ===================backward=====================
         optimizer.zero_grad()

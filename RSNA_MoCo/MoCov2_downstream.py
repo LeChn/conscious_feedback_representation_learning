@@ -1,4 +1,3 @@
-from __future__ import print_function
 import numpy as np
 from sklearn.metrics.ranking import roc_auc_score
 import os
@@ -21,7 +20,7 @@ from util import adjust_learning_rate, AverageMeter
 from sklearn.metrics import log_loss
 from models.simCLR import simCLR
 from models.LinearModel import LinearClassifierResNet
-from models.deepInfoMax import Encoder, GlobalDiscriminator, LocalDiscriminator, PriorDiscriminator, DeepInfoMaxLoss
+from models.deepInfoMax import GlobalDiscriminator, LocalDiscriminator, PriorDiscriminator, DeepInfoMaxLoss
 import tensorboard_logger as tb_logger
 import pdb
 os.environ["CUDA_VISIBLE_DEVICES"] = "2"
