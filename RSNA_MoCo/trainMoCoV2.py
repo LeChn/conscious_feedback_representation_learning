@@ -22,14 +22,6 @@ from NCE.NCECriterion import NCESoftmaxLoss
 import pdb
 os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1, 2, 3"
 
-try:
-    from apex import amp, optimizers
-except ImportError:
-    pass
-"""
-TODO: python 3.6 ModuleNotFoundError
-"""
-
 
 def parse_option():
 
@@ -37,78 +29,54 @@ def parse_option():
 
     parser = argparse.ArgumentParser('argument for training')
 
-    parser.add_argument('--print_freq', type=int,
-                        default=20, help='print frequency')
-    parser.add_argument('--tb_freq', type=int,
-                        default=500, help='tb frequency')
-    parser.add_argument('--save_freq', type=int,
-                        default=10, help='save frequency')
-    parser.add_argument('--batch_size', type=int,
-                        default=128, help='batch_size')
-    parser.add_argument('--num_workers', type=int,
-                        default=18, help='num of workers to use')
-    parser.add_argument('--epochs', type=int, default=200,
-                        help='number of training epochs')
+    parser.add_argument('--print_freq', type=int, default=20, help='print frequency')
+    parser.add_argument('--tb_freq', type=int, default=500, help='tb frequency')
+    parser.add_argument('--save_freq', type=int, default=10, help='save frequency')
+    parser.add_argument('--batch_size', type=int, default=128, help='batch_size')
+    parser.add_argument('--num_workers', type=int, default=18, help='num of workers to use')
+    parser.add_argument('--epochs', type=int, default=200, help='number of training epochs')
 
     # optimization
-    parser.add_argument('--learning_rate', type=float,
-                        default=0.00001, help='learning rate')
-    parser.add_argument('--lr_decay_epochs', type=str,
-                        default='100,120,200', help='where to decay lr, can be a list')
-    parser.add_argument('--lr_decay_rate', type=float,
-                        default=0. 25, help='decay rate for learning rate')
-    parser.add_argument('--beta1', type=float,
-                        default=0.5, help='beta1 for adam')
-    parser.add_argument('--beta2', type=float,
-                        default=0.999, help='beta2 for Adam')
-    parser.add_argument('--weight_decay', type=float,
-                        default=1e-4, help='weight decay')
+    parser.add_argument('--learning_rate', type=float, default=0.00001, help='learning rate')
+    parser.add_argument('--lr_decay_epochs', type=str, default='100,120,200', help='where to decay lr, can be a list')
+    parser.add_argument('--lr_decay_rate', type=float, default=0.25, help='decay rate for learning rate')
+    parser.add_argument('--beta1', type=float,  default=0.5, help='beta1 for adam')
+    parser.add_argument('--beta2', type=float, default=0.999, help='beta2 for Adam')
+    parser.add_argument('--weight_decay', type=float, default=1e-4, help='weight decay')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
 
     # crop
     parser.add_argument('--crop', type=float, default=0.4, help='minimum crop')
 
     # dataset
-    parser.add_argument('--train_txt', type=str,
-                        default="../experiments_configure/train100F.txt")
-    parser.add_argument('--dataset', type=str, default='imagenet100',
-                        choices=['imagenet100', 'imagenet'])
-    parser.add_argument('--data_folder', type=str,
-                        default="/DATA2/Data/RSNA/RSNAFTR")
+    parser.add_argument('--train_txt', type=str, default="../experiments_configure/train100F.txt")
+    parser.add_argument('--dataset', type=str, default='imagenet100', choices=['imagenet100', 'imagenet'])
+    parser.add_argument('--data_folder', type=str, default="/DATA2/Data/RSNA/RSNAFTR")
 
     # resume
-    parser.add_argument('--resume', default='', type=str,
-                        help='path to latest checkpoint (default: none)')
+    parser.add_argument('--resume', default='', type=str, help='path to latest checkpoint (default: none)')
 
     # augmentation setting
-    parser.add_argument('--aug', type=str, default='NULL',
-                        choices=['NULL', 'CJ'])
+    parser.add_argument('--aug', type=str, default='NULL', choices=['NULL', 'CJ'])
 
     # warm up
     parser.add_argument('--warm',  default=False, help='add warm-up setting')
     parser.add_argument('--amp',  default=False, help='using mixed precision')
-    parser.add_argument('--opt_level', type=str,
-                        default='O2', choices=['O1', 'O2'])
+    parser.add_argument('--opt_level', type=str, default='O2', choices=['O1', 'O2'])
 
     # model definition
-    parser.add_argument('--model', type=str, default='resnet50',
-                        choices=['resnet50', 'resnet50x2', 'resnet50x4'])
-    parser.add_argument('--model_path', type=str,
-                        default='.')
-    parser.add_argument('--tb_path', type=str,
-                        default='.')
+    parser.add_argument('--model', type=str, default='resnet50', choices=['resnet50', 'resnet50x2', 'resnet50x4'])
+    parser.add_argument('--model_path', type=str, default='.')
+    parser.add_argument('--tb_path', type=str, default='.')
     # loss function
-    parser.add_argument('--softmax', default=True,
-                        help='using softmax contrastive loss rather than NCE')
+    parser.add_argument('--softmax', default=True, help='using softmax contrastive loss rather than NCE')
     parser.add_argument('--nce_k', type=int, default=16384)
     parser.add_argument('--nce_t', type=float, default=0.07)
     parser.add_argument('--nce_m', type=float, default=0.5)
 
     # memory setting
-    parser.add_argument('--moco', default=True,
-                        help='using MoCo (otherwise Instance Discrimination)')
-    parser.add_argument('--alpha', type=float, default=0.999,
-                        help='exponential moving average weight')
+    parser.add_argument('--moco', default=True, help='using MoCo (otherwise Instance Discrimination)')
+    parser.add_argument('--alpha', type=float, default=0.999, help='exponential moving average weight')
 
     # GPU setting
     parser.add_argument('--gpu', default=0, type=int, help='GPU id to use.')
@@ -123,15 +91,7 @@ def parse_option():
     opt.method = 'softmax' if opt.softmax else 'nce'
     prefix = 'MoCo{}'.format(opt.alpha) if opt.moco else 'InsDis'
 
-    opt.model_name = '{}_{}_{}_{}_lr_{}_decay_{}_bsz_{}_crop_{}'.format(prefix, opt.method, opt.nce_k, opt.model,
-                                                                        opt.learning_rate, opt.weight_decay,
-                                                                        opt.batch_size, opt.crop)
-
-    if opt.warm:
-        opt.model_name = '{}_warm'.format(opt.model_name)
-    if opt.amp:
-        opt.model_name = '{}_amp_{}'.format(opt.model_name, opt.opt_level)
-
+    opt.model_name = '{}_{}_{}_{}_lr_{}_decay_{}_bsz_{}_crop_{}'.format(prefix, opt.method, opt.nce_k, opt.model, opt.learning_rate, opt.weight_decay, opt.batch_size, opt.crop)
     opt.model_name = '{}_aug_{}'.format(opt.model_name, opt.aug)
 
     opt.model_folder = os.path.join(opt.model_path, opt.model_name)
@@ -236,12 +196,9 @@ def main():
 
     # set the contrast memory and criterion
     if args.moco:
-        #contrast = MemoryMoCo(128, n_data, args.nce_k, args.nce_t, args.softmax).cuda(args.gpu)
-        contrast = MemoryMoCo(128, n_data, args.nce_k,
-                              args.nce_t, args.softmax).cuda()
+        contrast = MemoryMoCo(128, n_data, args.nce_k, args.nce_t, args.softmax).cuda()
     else:
-        contrast = MemoryInsDis(
-            128, n_data, args.nce_k, args.nce_t, args.nce_m, args.softmax).cuda(args.gpu)
+        contrast = MemoryInsDis(128, n_data, args.nce_k, args.nce_t, args.nce_m, args.softmax).cuda(args.gpu)
 
     criterion = NCESoftmaxLoss() if args.softmax else NCECriterion(n_data)
     criterion = criterion.cuda()
@@ -255,19 +212,6 @@ def main():
                                 lr=args.learning_rate,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
-    # optimizer_mlp = torch.optim.SGD(
-    #     simMLP.parameters(), lr=0.1, weight_decay=args.weight_decay)
-    cudnn.benchmark = True
-    if args.amp:
-        model, optimizer = amp.initialize(
-            model, optimizer, opt_level=args.opt_level)
-        if args.moco:
-            optimizer_ema = torch.optim.SGD(model_ema.parameters(),
-                                            lr=0,
-                                            momentum=0,
-                                            weight_decay=0)
-            model_ema, optimizer_ema = amp.initialize(
-                model_ema, optimizer_ema, opt_level=args.opt_level)
 
     # optionally resume from a checkpoint
     args.start_epoch = 0
@@ -305,8 +249,7 @@ def main():
 
         time1 = time.time()
         if args.moco:
-            loss, prob = train_moco(
-                epoch, train_loader, model, model_ema, contrast, criterion, optimizer, args)
+            loss, prob = train_moco(epoch, train_loader, model, model_ema, contrast, criterion, optimizer, args)
         time2 = time.time()
         print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
 
@@ -328,10 +271,7 @@ def main():
             }
             if args.moco:
                 state['model_ema'] = model_ema.state_dict()
-            if args.amp:
-                state['amp'] = amp.state_dict()
-            save_file = os.path.join(
-                args.model_folder, 'ckpt_epoch_{epoch}.pth'.format(epoch=epoch))
+            save_file = os.path.join(args.model_folder, 'ckpt_epoch_{epoch}.pth'.format(epoch=epoch))
             torch.save(state, save_file)
             # help release GPU memory
             del state
@@ -347,8 +287,6 @@ def main():
         }
         if args.moco:
             state['model_ema'] = model_ema.state_dict()
-        if args.amp:
-            state['amp'] = amp.state_dict()
         save_file = os.path.join(args.model_folder, 'current.pth')
         #torch.save(state, save_file)
         if epoch % args.save_freq == 0:
@@ -410,11 +348,7 @@ def train_moco(epoch, train_loader, model, model_ema, contrast, criterion, optim
         prob = out[:, 0].mean()
         # ===================backward=====================
         optimizer.zero_grad()
-        if opt.amp:
-            with amp.scale_loss(loss, optimizer) as scaled_loss:
-                scaled_loss.backward()
-        else:
-            loss.backward()
+        loss.backward()
         optimizer.step()
 
         # ===================meters=====================

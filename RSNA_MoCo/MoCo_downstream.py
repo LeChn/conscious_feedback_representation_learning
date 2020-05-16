@@ -69,7 +69,7 @@ def parse_option():
     parser.add_argument('--crop', type=float, default=0.2, help='minimum crop')
 
     # dataset
-    parser.add_argument('--train_txt', type=str, default="../experiments_configure/train1F.txt")
+    parser.add_argument('--train_txt', type=str, default="../experiments_configure/train5F.txt")
     parser.add_argument('--val_txt', type=str, default="../experiments_configure/valF.txt")
     parser.add_argument('--dataset', type=str, default='imagenet100', choices=['imagenet100', 'imagenet'])
     parser.add_argument('--data_folder', type=str, default='/DATA2/Data/RSNA')
@@ -91,7 +91,7 @@ def parse_option():
 
     opt = parser.parse_args()
     opt.lr_decay_epochs = [int(learn_rate) for learn_rate in opt.lr_decay_epochs.split(',')]
-    opt.model_name = f'{"ResNet" if opt.resnet else "MoCo_Freeze" if opt.freeze else "MoCo"}_{opt.batch_size}_bsz_{opt.learning_rate}_lr_{opt.weight_decay}_decay_{opt.crop}_crop'
+    opt.model_name = f'{"ResNet" if opt.resnet else "MoCo_Freeze" if opt.freeze else "MoCo"}_{opt.train_txt.split("/")[-1][5:-5]}_{opt.batch_size}_bsz_{opt.learning_rate}_lr_{opt.weight_decay}_decay_{opt.crop}_crop'
 
     opt.tb_folder = os.path.join(opt.tb_path, opt.model_name + '_layer{}'.format(opt.layer))
     if not os.path.isdir(opt.tb_folder):
@@ -196,7 +196,6 @@ def main():
     model = model.cuda()
     classifier = classifier.cuda()
 
-    #criterion = torch.nn.CrossEntropyLoss().cuda(args.gpu)
     criterion = torch.nn.BCEWithLogitsLoss().cuda(args.gpu)
 
     if args.freeze:

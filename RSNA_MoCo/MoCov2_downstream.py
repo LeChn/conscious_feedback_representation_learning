@@ -21,9 +21,10 @@ from util import adjust_learning_rate, AverageMeter
 from sklearn.metrics import log_loss
 from models.simCLR import simCLR
 from models.LinearModel import LinearClassifierResNet
+from models.deepInfoMax import Encoder, GlobalDiscriminator, LocalDiscriminator, PriorDiscriminator, DeepInfoMaxLoss
 import tensorboard_logger as tb_logger
 import pdb
-os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 
 def computeAUC(dataGT, dataPRED, classCount):
@@ -69,7 +70,7 @@ def parse_option():
     parser.add_argument('--crop', type=float, default=0.2, help='minimum crop')
 
     # dataset
-    parser.add_argument('--train_txt', type=str, default="../experiments_configure/train1F.txt")
+    parser.add_argument('--train_txt', type=str, default="../experiments_configure/train100F.txt")
     parser.add_argument('--val_txt', type=str, default="../experiments_configure/valF.txt")
     parser.add_argument('--dataset', type=str, default='imagenet100', choices=['imagenet100', 'imagenet'])
     parser.add_argument('--data_folder', type=str, default='/DATA2/Data/RSNA')
@@ -158,8 +159,7 @@ def main():
     c_val = f_val.readlines()
     f_val.close()
     valfiles = [s.replace('\n', '') for s in c_val]
-    val_dataset = RSNA_Data_finetune(
-        valfiles, csv_label, val_folder, val_transform)
+    val_dataset = RSNA_Data_finetune(valfiles, csv_label, val_folder, val_transform)
 
     print("Labled data for training", len(train_dataset))
     train_sampler = None

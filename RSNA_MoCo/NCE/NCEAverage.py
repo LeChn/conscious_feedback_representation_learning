@@ -91,6 +91,7 @@ class NCEAverage(nn.Module):
 
 class MemoryInsDis(nn.Module):
     """Memory bank with instance discrimination"""
+
     def __init__(self, inputSize, outputSize, K, T=0.07, momentum=0.5, use_softmax=False):
         super(MemoryInsDis, self).__init__()
         self.nLem = outputSize
@@ -150,6 +151,7 @@ class MemoryInsDis(nn.Module):
 
 class MemoryMoCo(nn.Module):
     """Fixed-size queue with momentum encoder"""
+
     def __init__(self, inputSize, outputSize, K, T=0.07, use_softmax=False):
         super(MemoryMoCo, self).__init__()
         self.outputSize = outputSize

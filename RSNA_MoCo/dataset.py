@@ -46,7 +46,6 @@ class RSNA_Data_finetune(Dataset):
         # print(self.label_csv.head())
 
     def __getitem__(self, idx):
-
         filename = self.name_list[idx]
         filepath = os.path.join(self.train_png_dir, filename)
         # print(filepath)

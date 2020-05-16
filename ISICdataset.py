@@ -38,6 +38,7 @@ class ImageFolderInstance(datasets.ImageFolder):
 
 class RGB2Lab(object):
     """Convert RGB PIL image to ndarray Lab."""
+
     def __call__(self, img):
         img = np.asarray(img, np.uint8)
         img = color.rgb2lab(img)
@@ -46,6 +47,7 @@ class RGB2Lab(object):
 
 class RGB2HSV(object):
     """Convert RGB PIL image to ndarray HSV."""
+
     def __call__(self, img):
         img = np.asarray(img, np.uint8)
         img = color.rgb2hsv(img)
@@ -54,6 +56,7 @@ class RGB2HSV(object):
 
 class RGB2HED(object):
     """Convert RGB PIL image to ndarray HED."""
+
     def __call__(self, img):
         img = np.asarray(img, np.uint8)
         img = color.rgb2hed(img)
@@ -62,6 +65,7 @@ class RGB2HED(object):
 
 class RGB2LUV(object):
     """Convert RGB PIL image to ndarray LUV."""
+
     def __call__(self, img):
         img = np.asarray(img, np.uint8)
         img = color.rgb2luv(img)
@@ -70,6 +74,7 @@ class RGB2LUV(object):
 
 class RGB2YUV(object):
     """Convert RGB PIL image to ndarray YUV."""
+
     def __call__(self, img):
         img = np.asarray(img, np.uint8)
         img = color.rgb2yuv(img)
@@ -78,6 +83,7 @@ class RGB2YUV(object):
 
 class RGB2XYZ(object):
     """Convert RGB PIL image to ndarray XYZ."""
+
     def __call__(self, img):
         img = np.asarray(img, np.uint8)
         img = color.rgb2xyz(img)
@@ -86,6 +92,7 @@ class RGB2XYZ(object):
 
 class RGB2YCbCr(object):
     """Convert RGB PIL image to ndarray YCbCr."""
+
     def __call__(self, img):
         img = np.asarray(img, np.uint8)
         img = color.rgb2ycbcr(img)
@@ -94,6 +101,7 @@ class RGB2YCbCr(object):
 
 class RGB2YDbDr(object):
     """Convert RGB PIL image to ndarray YDbDr."""
+
     def __call__(self, img):
         img = np.asarray(img, np.uint8)
         img = color.rgb2ydbdr(img)
@@ -102,6 +110,7 @@ class RGB2YDbDr(object):
 
 class RGB2YPbPr(object):
     """Convert RGB PIL image to ndarray YPbPr."""
+
     def __call__(self, img):
         img = np.asarray(img, np.uint8)
         img = color.rgb2ypbpr(img)
@@ -110,6 +119,7 @@ class RGB2YPbPr(object):
 
 class RGB2YIQ(object):
     """Convert RGB PIL image to ndarray YIQ."""
+
     def __call__(self, img):
         img = np.asarray(img, np.uint8)
         img = color.rgb2yiq(img)
@@ -118,6 +128,7 @@ class RGB2YIQ(object):
 
 class RGB2CIERGB(object):
     """Convert RGB PIL image to ndarray RGBCIE."""
+
     def __call__(self, img):
         img = np.asarray(img, np.uint8)
         img = color.rgb2rgbcie(img)

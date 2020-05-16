@@ -13,26 +13,23 @@ class simCLR(nn.Module):
     def __init__(self, feature_dim=128):
         super(simCLR, self).__init__()
 
-        self.f = []
-        for name, module in InsResNet50().encoder.module.named_children():
-            # if name == 'conv1':
-            #     module = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
-            if not isinstance(module, nn.Linear) and not name == 'l2norm':
-                self.f.append(module)
-        # encoder
-        self.f = nn.Sequential(*self.f)
-        self.f = nn.DataParallel(self.f)
+        # localInfoMax
+        self.f = nn.Sequential(*list(InsResNet50().encoder.module.children())[:-3])
+        # h from simCLR
+        self.pool = nn.AvgPool2d(kernel_size=7, stride=1, padding=0)
         # projection head
         self.g = nn.Sequential(nn.Linear(2048, 512, bias=False),
-                               nn.ReLU(inplace=True), nn.Linear(512, feature_dim, bias=True))
-        self.g = nn.DataParallel(self.g)
+                               nn.ReLU(inplace=True),
+                               nn.Linear(512, feature_dim, bias=True))
 
     def forward(self, x):
-        x = self.f(x)
+        self.f[0] = nn.Conv2d(x.size(1), 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+        M = self.f(x)
+        x = self.pool(M)
         feature = torch.flatten(x, start_dim=1)
-        return F.normalize(feature, dim=-1)
+        # return F.normalize(feature, dim=-1)
         out = self.g(feature)
-        return F.normalize(feature, dim=-1), F.normalize(out, dim=-1)
+        return F.normalize(feature, dim=-1), F.normalize(out, dim=-1), M
 
 
 # mod = simCLR()

@@ -15,14 +15,14 @@ def text_save(filename, data):  # filename为写入CSV文件的路径，data为�
 if __name__ == '__main__':
     from random import shuffle
     import random
-    percent = 0.01
-    path = "/DATA2/Data/RSNA/RSNAFTR"
-    files = os.listdir(path)
-    shuffle(files)
-    files = files[:int(percent*len(files))]
-    train_txt = "../../experiments_configure/train" + \
-        str(int(percent*100)) + "F.txt"
-    text_save(train_txt, files)
+    percents = [0.01, 0.05, 0.10, 0.20, 0.50, 1.00]
+    for percent in percents:
+        path = "/DATA2/Data/RSNA/RSNAFTR"
+        files = os.listdir(path)
+        shuffle(files)
+        files = files[:int(percent*len(files))]
+        train_txt = "../../experiments_configure/train" + str(int(percent*100)) + "F.txt"
+        text_save(train_txt, files)
 
     path = "/DATA2/Data/RSNA/RSNAFVAL"
     files = os.listdir(path)
