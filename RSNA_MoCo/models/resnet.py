@@ -119,12 +119,9 @@ class ResNet(nn.Module):
 
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, self.base, layers[0])
-        self.layer2 = self._make_layer(
-            block, self.base * 2, layers[1], stride=2)
-        self.layer3 = self._make_layer(
-            block, self.base * 4, layers[2], stride=2)
-        self.layer4 = self._make_layer(
-            block, self.base * 8, layers[3], stride=2)
+        self.layer2 = self._make_layer(block, self.base * 2, layers[1], stride=2)
+        self.layer3 = self._make_layer(block, self.base * 4, layers[2], stride=2)
+        self.layer4 = self._make_layer(block, self.base * 8, layers[3], stride=2)
         self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fc = nn.Linear(self.base * 8 * block.expansion, low_dim)
         self.l2norm = Normalize(2)
@@ -140,11 +137,8 @@ class ResNet(nn.Module):
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
-            downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(planes * block.expansion),
-            )
+            downsample = nn.Sequential(nn.Conv2d(self.inplanes, planes * block.expansion, kernel_size=1, stride=stride, bias=False),
+                                       nn.BatchNorm2d(planes * block.expansion))
 
         layers = []
         layers.append(block(self.inplanes, planes, stride, downsample))
