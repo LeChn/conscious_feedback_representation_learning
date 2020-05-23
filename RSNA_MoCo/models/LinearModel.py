@@ -101,8 +101,7 @@ class LinearClassifierResNet(nn.Module):
 
         self.classifier.add_module('Flatten', Flatten())
         print('classifier input: {}'.format(nChannels * pool_size * pool_size))
-        self.classifier.add_module('LiniearClassifier', nn.Linear(
-            nChannels * pool_size * pool_size, n_label))
+        self.classifier.add_module('LiniearClassifier', nn.Linear(nChannels * pool_size * pool_size, n_label))
         self.initilize()
 
     def initilize(self):

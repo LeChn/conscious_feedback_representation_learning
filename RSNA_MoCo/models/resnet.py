@@ -168,7 +168,7 @@ class ResNet(nn.Module):
             return x
         x = self.layer4(x)
         if layer == 5:
-            return x  # f(x) in infoMax
+            return x  # f(x) in infoMax [2048,7,7]
         self.avgpool = nn.AvgPool2d(x.size(2), stride=1)
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)

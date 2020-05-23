@@ -23,7 +23,7 @@ from models.LinearModel import LinearClassifierResNet
 from models.deepInfoMax import GlobalDiscriminator, LocalDiscriminator, PriorDiscriminator, DeepInfoMaxLoss
 import tensorboard_logger as tb_logger
 import pdb
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 def computeAUC(dataGT, dataPRED, classCount):
@@ -271,6 +271,7 @@ def train(epoch, train_loader, model, classifier, criterion, optimizer, opt):
         if opt.gpu is not None:
             input = input.cuda(opt.gpu, non_blocking=True)
         input = input.float()
+        pdb.set_trace()
         target = target.float()
         target = target.view(-1, 6).contiguous().cuda(async=True)
         outGT = torch.cat((outGT, target), 0)

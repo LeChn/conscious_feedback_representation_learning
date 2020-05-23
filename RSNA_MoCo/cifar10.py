@@ -3,12 +3,13 @@ import os
 import sys
 import time
 import torch
+from torch import nn
 import torch.backends.cudnn as cudnn
 import argparse
 import socket
 from dataset import RSNA_Data
 import tensorboard_logger as tb_logger
-
+import torchvision
 from torchvision import transforms, datasets
 from util import adjust_learning_rate, AverageMeter
 
@@ -19,7 +20,7 @@ from NCE.NCEAverage import MemoryMoCo
 from NCE.NCECriterion import NCECriterion
 from NCE.NCECriterion import NCESoftmaxLoss
 import pdb
-os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 def parse_option():
@@ -104,101 +105,28 @@ def parse_option():
     return opt
 
 
-def moment_update(model, model_ema, m):
-    """ model_ema = m * model_ema + (1 - m) model """
-    for p1, p2 in zip(model.parameters(), model_ema.parameters()):
-        p2.data.mul_(m).add_(1-m, p1.detach().data)
-
-
-def get_shuffle_ids(bsz):
-    """generate shuffle ids for ShuffleBN"""
-    forward_inds = torch.randperm(bsz).long().cuda()
-    backward_inds = torch.zeros(bsz).long().cuda()
-    value = torch.arange(bsz).long().cuda()
-    backward_inds.index_copy_(0, forward_inds, value)
-    return forward_inds, backward_inds
-
-
 def main():
 
     args = parse_option()
-    train_txt = args.train_txt
-    if args.gpu is not None:
-        print("Use GPU: {} for training".format(args.gpu))
 
-    # set the data loader
-    data_folder = args.data_folder
+    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-    image_size = 224
-    mean = [0.5]
-    std = [0.5]
-    normalize = transforms.Normalize(mean=mean, std=std)
+    trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+    train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, pin_memory=True, shuffle=True, num_workers=2)
 
-    if args.aug == 'NULL':
-        train_transform = transforms.Compose([
-            transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ])
-    elif args.aug == 'CJ':
-        train_transform = transforms.Compose([
-            transforms.RandomResizedCrop(image_size, scale=(args.crop, 1.)),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ])
-    else:
-        raise NotImplemented('augmentation not supported: {}'.format(args.aug))
+    testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
+    test_loader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, pin_memory=True, shuffle=False, num_workers=2)
 
-    f_train = open(train_txt)
-    c_train = f_train.readlines()
-    f_train.close()
-    trainfiles = [s.replace('\n', '') for s in c_train]
-    train_dataset = RSNA_Data(trainfiles, data_folder, train_transform)
-    print(len(train_dataset))
-    train_sampler = None
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-        num_workers=args.num_workers, pin_memory=True, sampler=train_sampler)
-
+    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
     # create model and optimizer
-    n_data = len(train_dataset)
+    n_data = len(trainset)
 
-    if args.model == 'resnet50':
-        model = simCLR()
-        #model = torch.nn.DataParallel(model)
-        if args.moco:
-            model_ema = simCLR()
-            #model_ema = torch.nn.DataParallel(model_ema)
-    elif args.model == 'resnet50x2':
-        model = simCLR(width=2)
-        if args.moco:
-            model_ema = simCLR(width=2)
-    elif args.model == 'resnet50x4':
-        model = simCLR(width=4)
-        if args.moco:
-            model_ema = simCLR(width=4)
-    else:
-        raise NotImplementedError('model not supported {}'.format(args.model))
-
-    # copy weights from `model' to `model_ema'
-    moment_update(model, model_ema, 0)
-
-    # set the contrast memory and criterion
-    contrast = MemoryMoCo(128, n_data, args.nce_k, args.nce_t, args.softmax).cuda()
-
-    criterion = NCESoftmaxLoss() if args.softmax else NCECriterion(n_data)
-    criterion = criterion.cuda()
-    loss_fn = DeepInfoMaxLoss().cuda()
-
+    # Resnet50 with MLP projection head
+    model = simCLR(in_channel=3)
+    model = torch.nn.DataParallel(model)
     model = model.cuda()
 
-    if args.moco:
-        model_ema = model_ema.cuda()
-
+    loss_fn = DeepInfoMaxLoss().cuda()
     optimizer = torch.optim.SGD(model.parameters(),
                                 lr=args.learning_rate,
                                 momentum=args.momentum,
@@ -214,14 +142,12 @@ def main():
             args.start_epoch = checkpoint['epoch'] + 1
             model.load_state_dict(checkpoint['model'])
             optimizer.load_state_dict(checkpoint['optimizer'])
-            contrast.load_state_dict(checkpoint['contrast'])
-            model_ema.load_state_dict(checkpoint['model_ema'])
 
             print(f"=> loaded successfully '{args.resume}' (epoch {checkpoint['epoch']})")
             del checkpoint
             torch.cuda.empty_cache()
         else:
-            print("=> no checkpoint found at '{}'".format(args.resume))
+            print(f"=> no checkpoint found at '{args.resume}'")
 
     # tensorboard
     logger = tb_logger.Logger(logdir=args.tb_folder, flush_secs=2)
@@ -233,13 +159,12 @@ def main():
         print("==> training...")
 
         time1 = time.time()
-        loss, prob = train_moco(epoch, train_loader, model, model_ema, contrast, criterion, loss_fn, optimizer, args)
+        loss = train_cifar(epoch, train_loader, model, loss_fn, optimizer, args)
         time2 = time.time()
         print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
 
         # tensorboard logger
         logger.log_value('ins_loss', loss, epoch)
-        logger.log_value('ins_prob', prob, epoch)
         logger.log_value('learning_rate', optimizer.param_groups[0]['lr'], epoch)
 
         # save model
@@ -248,12 +173,9 @@ def main():
             state = {
                 'opt': args,
                 'model': model.state_dict(),
-                'contrast': contrast.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'epoch': epoch,
             }
-            if args.moco:
-                state['model_ema'] = model_ema.state_dict()
             save_file = os.path.join(args.model_folder, 'ckpt_epoch_{epoch}.pth'.format(epoch=epoch))
             torch.save(state, save_file)
             # help release GPU memory
@@ -264,11 +186,9 @@ def main():
         state = {
             'opt': args,
             'model': model.state_dict(),
-            'contrast': contrast.state_dict(),
             'optimizer': optimizer.state_dict(),
             'epoch': epoch,
         }
-        state['model_ema'] = model_ema.state_dict()
         save_file = os.path.join(args.model_folder, 'current.pth')
         #torch.save(state, save_file)
         if epoch % args.save_freq == 0:
@@ -279,27 +199,24 @@ def main():
         torch.cuda.empty_cache()
 
 
-def train_moco(epoch, train_loader, model, model_ema, contrast, criterion, loss_fn, optimizer, opt):
+def train_cifar(epoch, train_loader, model, loss_fn, optimizer, opt):
     """
     one epoch training for instance discrimination
     """
-    print("Train MoCO!")
+    print("Train Cifar with InfoMAX!")
     model.train()
-    model_ema.eval()
 
     def set_bn_train(m):
         classname = m.__class__.__name__
         if classname.find('BatchNorm') != -1:
             m.train()
-    model_ema.apply(set_bn_train)
 
     batch_time = AverageMeter()
     data_time = AverageMeter()
     loss_meter = AverageMeter()
-    prob_meter = AverageMeter()
 
     end = time.time()
-    for idx, inputs in enumerate(train_loader):
+    for idx, (inputs, _) in enumerate(train_loader):
         data_time.update(time.time() - end)
 
         bsz = inputs.size(0)
@@ -307,20 +224,9 @@ def train_moco(epoch, train_loader, model, model_ema, contrast, criterion, loss_
         inputs = inputs.float().cuda()
 
         # ===================forward=====================
-        x1, x2 = torch.split(inputs, [1, 1], dim=1)
-
-        # ids for ShuffleBN
-        shuffle_ids, reverse_ids = get_shuffle_ids(bsz)
-        _, feat_q, M = model(x1)
-        with torch.no_grad():
-            x2 = x2[shuffle_ids]
-            _, feat_k, _ = model_ema(x2)
-            feat_k = feat_k[reverse_ids]
-
-        out = contrast(feat_q, feat_k)
+        _, feat_q, M = model(inputs)
         M_prime = torch.cat((M[1:], M[0:1]), dim=0)
-        loss = criterion(out) + loss_fn(feat_q, M, M_prime) # 9 + 2 -> 3 + 2
-        prob = out[:, 0].mean()
+        loss = loss_fn(feat_q, M, M_prime)  # 9 + 2 -> 3 + 2
         # ===================backward=====================
         optimizer.zero_grad()
         loss.backward()
@@ -328,9 +234,6 @@ def train_moco(epoch, train_loader, model, model_ema, contrast, criterion, loss_
 
         # ===================meters=====================
         loss_meter.update(loss.item(), bsz)
-        prob_meter.update(prob.item(), bsz)
-
-        moment_update(model, model_ema, opt.alpha)
 
         torch.cuda.synchronize()
         batch_time.update(time.time() - end)
@@ -341,14 +244,13 @@ def train_moco(epoch, train_loader, model, model_ema, contrast, criterion, loss_
             print('Train: [{0}][{1}/{2}]\t'
                   'BT {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'DT {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                  'loss {loss.val:.3f} ({loss.avg:.3f})\t'
-                  'prob {prob.val:.3f} ({prob.avg:.3f})'.format(
+                  'loss {loss.val:.3f} ({loss.avg:.3f})\t'.format(
                       epoch, idx + 1, len(train_loader), batch_time=batch_time,
-                      data_time=data_time, loss=loss_meter, prob=prob_meter))
+                      data_time=data_time, loss=loss_meter))
             # print(out.shape)
             sys.stdout.flush()
 
-    return loss_meter.avg, prob_meter.avg
+    return loss_meter.avg
 
 
 if __name__ == '__main__':
