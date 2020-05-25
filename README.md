@@ -37,15 +37,60 @@ conda env create -f environment.yml
 cd RSNA_MoCo
 ```
 
-```
-python trainMoCo.py
-python trainMoCoV2.py
-python trainSimCLR.py
-python trainInfoMaxMoCo.py (under development)
-python MoCo_downstream.py --resnet --frozen
-python MoCov2_downstream.py --resnet --frozen
-python cifar10.py
-```
+- Semi-Supervised Learning
+
+  - Unsupervised training stage
+    - [Momentum Contrast](https://arxiv.org/pdf/1911.05722.pdf) (MoCo)
+      ```bash
+      python trainMoCo.py
+      ```
+    - [Simple Contrastive Learning of Representations](https://arxiv.org/pdf/2002.05709.pdf) (SimCLR)
+      ```bash
+      python trainMoCoV2.py
+      ```
+    - [Momentum Contrast Version 2](https://arxiv.org/pdf/1911.05722.pdf) (MoCoV2)
+      ```bash
+      python trainSimCLR.py
+      ```
+  - Finetuning stage (Requires e.g. **train10F.txt**)
+
+    - Linear Classifier which freezes all backbone encoder weights
+
+      ```bash
+      python MoCo_downstream.py --frozen
+      ```
+
+      or
+
+      ```bash
+      python MoCov2_downstream.py --frozen
+      ```
+
+    - Transfer Learning which retrains all layers (default)
+
+      ```bash
+      python MoCo_downstream.py
+      ```
+
+      or
+
+      ```bash
+      python MoCov2_downstream.py
+      ```
+
+- Supervised Learning
+
+  - ResNet-50
+
+    ```bash
+    python MoCo_downstream.py --resnet
+    ```
+
+    or
+
+    ```bash
+    python MoCov2_downstream.py --resnet
+    ```
 
 ## Contributing
 
