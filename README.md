@@ -46,11 +46,11 @@ cd RSNA_MoCo
       ```
     - [Simple Contrastive Learning of Representations](https://arxiv.org/pdf/2002.05709.pdf) (SimCLR)
       ```bash
-      python trainMoCoV2.py
+      python trainSimCLR.py
       ```
     - [Momentum Contrast Version 2](https://arxiv.org/pdf/1911.05722.pdf) (MoCoV2)
       ```bash
-      python trainSimCLR.py
+      python trainMoCoV2.py
       ```
   - Finetuning stage (Requires e.g. **train10F.txt**)
 
