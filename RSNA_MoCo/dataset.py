@@ -2,7 +2,6 @@ import numpy as np
 from skimage import color
 from PIL import Image
 import torch
-import torchvision.datasets as datasets
 from torch.utils.data import Dataset
 import os
 import pandas as pd
