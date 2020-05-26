@@ -94,7 +94,7 @@ cd RSNA_MoCo
 
 ## Results
 
-Results on RSNA data
+Results on RSNA data Metric: AUC
 
 | Pecentage of labeled data |  MoCo  | MoCo_efficient | ResNet50 | MoCo_super | MoCoV2_super |
 | :-----------------------: | :----: | :------------: | :------: | :--------: | :----------: |
@@ -105,7 +105,7 @@ Results on RSNA data
 |             5             | 0.8599 |     0.8686     |  0.8402  |   0.8837   |    0.8951    |
 |             1             | 0.7751 |     0.7907     |  0.7462  |   0.8511   |    0.8177    |
 
-Results on ISIC data
+Results on ISIC data Metric: Accuracy
 
 | Pecentage of labeled data |  MoCo  | MoCo_V2 | ResNet50 | SimCLR |
 | :-----------------------: | :----: | :-----: | :------: | :----: |
@@ -115,6 +115,16 @@ Results on ISIC data
 |            10             | 0.6181 | 0.6355  |  0.6355  | 0.6266 |
 |             5             | 0.6131 | 0.6236  |  0.6236  | 0.6133 |
 |             1             | 0.5817 | 0.5947  |  0.5947  | 0.5906 |
+
+Resutls on Brats18 data Metric: Dice
+| Pecentage of labeled data |  deeplabv3  | deeplabv3+MoCo_super | deeplabv3+MoCo | Unet |
+| :-----------------------: | :----: | :-----: | :------: | :----: |
+|            100            | 0.6988 | 0.7261  |  0.7085  | 0.7387 |
+|            50             | 0.6199 | 0.7082  |  0.6952  | 0.7110 |
+|            20             | 0.5353 | 0.6255  |  0.6387  | 0.6552 |
+|            10             | 0.3983 | 0.5667  |  0.5303  | 0.5545 |
+|             5             | 0.3007 | 0.5267  |  0.5394  | 0.5585 |
+|             1             | 0.1831 | 0.3579  |  0.3554  | 0.2655 |
 
 ## Contributing
 
