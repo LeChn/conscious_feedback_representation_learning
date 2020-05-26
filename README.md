@@ -28,8 +28,8 @@ conda env create -f environment.yml
 |    Name    | Image Size | Unlabeled Count | Labeled Count | #Classes | Multilabel |
 | :--------: | :--------: | :-------------: | :-----------: | -------- | ---------- |
 | RSNA Brain | 224 x 224  |     564,601     |    150,560    | 6        | Yes        |
-|    ACDC    | 400 x 400  |        ?        |       ?       | ?        | No         |
-|    ISIC    |     ?      |        ?        |       ?       | ?        | ?          |
+|    ACDC    | 400 x 400  |                 |       ?       | ?        | No         |
+|    ISIC    | 224 x 224  |     25,979      |     6088      | 9        | No         |
 
 ## Training
 
