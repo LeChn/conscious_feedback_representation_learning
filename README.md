@@ -92,6 +92,17 @@ cd RSNA_MoCo
     python MoCov2_downstream.py --resnet
     ```
 
+## Results
+
+|    Pecentage of labeled data    | MoCo       | MoCo_efficient  | ResNet50      | MoCo_super | 
+| :------------------------:      | :--------: | :-------------: | :-----------: | ---------- |
+|           100                   | 0.9112     | 0.9036          | 0.9250        |0.9419      |
+|            50                   | 0.8967     | 0.8986          | 0.8935        |0.9298      | 
+|            20                   | 0.8865     | 0.8958          | 0.8567        |0.9192      |
+|            10                   | 0.8702     | 0.8751          | 0.8476        |0.9028      | 
+|             5                   | 0.8599     | 0.8686          | 0.8402        |0.8837      | 
+|             1                   | 0.7751     | 0.7907          | 0.7462        |0.8511      |
+
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
