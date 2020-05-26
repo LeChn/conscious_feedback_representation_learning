@@ -1,2 +1,6 @@
+.gitignore
 RSNA_MoCo/*.pdf
 RSNA_MoCo/data
+**/.DS_Store
+*.DS_Store
+.vscode/
