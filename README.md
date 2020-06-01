@@ -30,7 +30,7 @@ conda env create -f environment.yml
 | RSNA Brain | 224 x 224  |     564,601     |    150,560    |    6     |    Yes     |
 |    ACDC    | 400 x 400  |        ?        |       ?       |    ?     |     No     |
 |    ISIC    | 224 x 224  |     25,979      |     6,088     |    9     |     No     |
-
+|    Fundus  | 400 x 400  |     26,344      |     7025      |    5     |     No     |
 ## Training
 
 ```bash
@@ -104,6 +104,17 @@ Results on RSNA data Metric: AUC
 |            10             | 0.8702 |     0.8751     |  0.8476  |   0.9028   |    0.9229    |
 |             5             | 0.8599 |     0.8686     |  0.8402  |   0.8837   |    0.8951    |
 |             1             | 0.7751 |     0.7907     |  0.7462  |   0.8511   |    0.8177    |
+
+Results on Fundus (Diabetic Retinopathy Detection) data Metric: AUC
+
+| Pecentage of labeled data | Resnet50 | MoCo    | MoCoV2   | MoCo-FTAL |
+| :-----------------------: | :----:   | :-----: | :------: | :----:    |
+|            100            | 0.57411  | 0.6817  |  0.6407  | 0.7705    |
+|            50             | 0.5541   | 0.6651  |  0.6565  | 0.7421    |
+|            20             | 0.5463   | 0.6263  |  0.6421  | 0.6956    |
+|            10             | 0.54320  | 0.5926  |  0.6355  | 0.6324    |
+|             5             | 0.5380   | 0.5593  |  0.6236  | 0.5862    |
+|             1             | 0.5369   | 0.5419  |  0.5947  | 0.5427    |
 
 Results on ISIC data Metric: Accuracy
 
